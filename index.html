@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1030">
+<title>Victory Choir Songbook</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="hero">
+  <div class="hero-top">
+    <img class="logo" src="assets/logo.png" alt="Victory Outreach Ministry International logo">
+    <div class="titles">
+      <h1>Choir Songbook</h1>
+      <p>Victory Outreach Ministry International</p>
+    </div>
+    <button id="roleBtn" class="role-btn" type="button">Member</button>
+  </div>
+  <div class="search">
+    <input id="q" type="search" placeholder="Search title, composer or lyrics" autocomplete="off" aria-label="Search songs">
+  </div>
+  <div class="chips" id="cats" role="tablist" aria-label="Category"></div>
+  <div class="leaderbar" id="leaderbar" hidden>
+    <label for="leaderSel">Keys for</label>
+    <select id="leaderSel"></select>
+    <label class="check"><input type="checkbox" id="onlyKeys"> only songs with a key</label>
+  </div>
+</header>
+
+<main>
+  <div class="count" id="count"></div>
+  <ul class="list" id="list"></ul>
+  <div class="empty" id="empty" hidden>No songs found. Try another word.</div>
+</main>
+
+<button id="addBtn" class="fab" type="button" hidden aria-label="Add song">+</button>
+
+<dialog id="songDlg"><div id="songBody"></div></dialog>
+<dialog id="roleDlg"></dialog>
+<dialog id="editDlg"></dialog>
+
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
