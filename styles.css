@@ -171,3 +171,13 @@ form textarea { min-height: 220px; resize: vertical; }
 .seg button { border: none; background: none; padding: 8px 16px; border-radius: 999px; cursor: pointer; color: var(--muted); }
 .seg button.on { background: linear-gradient(135deg, var(--gold-bright), #b88a22); color: #0a1030; font-weight: 500; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.clip { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.clip-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.clip-head b { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 600 1.1rem/1.2 var(--font-display); }
+.clip-head .muted { font-size: .78rem; }
+.btn.sm { min-height: 34px; padding: 0 14px; font-size: .8rem; }
+.clip-tools { margin-top: 16px; }
+.clip-tools label[for="clipLabel"] { display: block; margin: 0 0 6px; font-size: .74rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.clip-tools input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-gold); background: var(--surface); margin-bottom: 12px; }
+.btn.rec { border-color: var(--danger); color: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }

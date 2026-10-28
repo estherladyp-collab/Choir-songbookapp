@@ -83,10 +83,92 @@
 
   const refresh = () => { renderChrome(); renderList(); };
 
+  // ---------- recordings (saved on this device in IndexedDB) ----------
+  const idb = () => new Promise((res, rej) => {
+    const r = indexedDB.open("songbook.audio.v1", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("clips", { keyPath: "id" });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const clipTx = (mode, fn) => idb().then(db => new Promise((res, rej) => {
+    const t = db.transaction("clips", mode), req = fn(t.objectStore("clips"));
+    t.oncomplete = () => res(req.result);
+    t.onerror = () => rej(t.error);
+  }));
+  const putClip = c => clipTx("readwrite", s => s.put(c));
+  const delClip = id => clipTx("readwrite", s => s.delete(id));
+  const allClips = () => clipTx("readonly", s => s.getAll());
+
+  let currentSong = null, clipUrls = [], rec = null;
+
+  const clipMsg = (t, ok) => { const m = $("clipMsg"); if (m) { m.textContent = t; m.style.color = ok ? "var(--gold)" : "var(--danger)"; } };
+
+  async function renderClips() {
+    const box = $("clips");
+    if (!box || !currentSong) return;
+    clipUrls.forEach(URL.revokeObjectURL); clipUrls = [];
+    let clips = [];
+    try { clips = (await allClips()).filter(c => c.songId === currentSong).sort((a, b) => a.created - b.created); }
+    catch { clipMsg("Saving audio is not available in this browser mode."); }
+    if (!$("clips")) return;
+    const items = clips.map(c => {
+      const url = URL.createObjectURL(c.blob); clipUrls.push(url);
+      return `<div class="clip"><div class="clip-head"><b>${esc(c.label)}</b><span class="muted">${new Date(c.created).toLocaleDateString()}</span>
+        ${isDirector() ? `<button class="btn danger sm" data-delclip="${c.id}" type="button">Delete</button>` : ""}</div>
+        <audio controls preload="none" src="${url}"></audio></div>`;
+    }).join("");
+    const tools = canSeeKeys() ? `<div class="clip-tools"><label for="clipLabel">Label (optional)</label>
+      <input id="clipLabel" placeholder="e.g. Alto part, Esther in D#">
+      <div class="btns"><label class="btn solid" for="clipFile">Upload audio</label>
+      <input id="clipFile" type="file" accept="audio/*" multiple hidden>
+      <button class="btn" id="recBtn" type="button">● Record</button></div>
+      <div class="msg" id="clipMsg" role="status"></div></div>` : "";
+    box.innerHTML = (items || `<p class="muted">No recordings yet.</p>`) + tools;
+  }
+
+  async function saveClip(blob, label, fallback) {
+    await putClip({ id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), songId: currentSong,
+      label: (label || "").trim() || fallback, blob, created: Date.now() });
+    try { navigator.storage?.persist?.(); } catch { /* optional */ }
+  }
+
+  async function uploadFiles(files) {
+    const label = ($("clipLabel") || {}).value;
+    try {
+      for (const f of files) await saveClip(f, files.length === 1 ? label : "", (label ? label + " · " : "") + f.name.replace(/\.[^.]+$/, ""));
+      await renderClips(); clipMsg("Saved.", true);
+    } catch { clipMsg("Could not save this file. Free up some space and try again."); }
+  }
+
+  async function toggleRec() {
+    const btn = $("recBtn");
+    if (rec) { rec.mr.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return clipMsg("Recording is not supported here. Use Upload audio instead.");
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { return clipMsg("The microphone is blocked. Allow it in your browser settings, or use Upload audio."); }
+    const mr = new MediaRecorder(stream), chunks = [], t0 = Date.now(), label = ($("clipLabel") || {}).value;
+    rec = { mr, stream };
+    mr.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const tick = setInterval(() => { const b = $("recBtn"); if (b) { const s = Math.floor((Date.now() - t0) / 1000); b.textContent = "■ Stop " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); } }, 500);
+    mr.onstop = async () => {
+      clearInterval(tick); stream.getTracks().forEach(t => t.stop()); rec = null;
+      if (chunks.length && currentSong) {
+        let ok = true;
+        try { await saveClip(new Blob(chunks, { type: mr.mimeType || "audio/webm" }), label, "Recording " + new Date().toLocaleString()); }
+        catch { ok = false; }
+        await renderClips();
+        clipMsg(ok ? "Recording saved." : "Could not save the recording.", ok);
+      } else renderClips();
+    };
+    mr.start(); btn.textContent = "■ Stop 0:00"; btn.classList.add("rec"); clipMsg("Recording… tap Stop when you are done.", true);
+  }
+
   // ---------- song sheet ----------
   function openSong(id) {
     const s = songs.find(x => x.id === id);
     if (!s) return;
+    currentSong = id;
     const vid = ytId(s.youtube);
     let listen = "";
     if (vid) listen += `<iframe class="player" src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(s.title)}" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
@@ -105,11 +187,13 @@
       ${s.needsCheck ? `<p class="note" style="margin-top:14px">Title typed from the handwritten song list. Please double-check the spelling.</p>` : ""}
       ${s.note ? `<p class="note" style="margin-top:14px">${esc(s.note)}</p>` : ""}
       <div class="sec"><h3>Listen</h3>${listen}</div>
+      <div class="sec"><h3>Recordings</h3><div id="clips"></div></div>
       ${keys}
       <div class="sec"><h3>Lyrics</h3>${s.lyrics ? `<div class="lyrics">${esc(s.lyrics)}</div>` : `<p class="muted">Lyrics not added yet.</p>`}</div>
     </div>`;
     const d = $("songDlg");
     if (!d.open) d.showModal();
+    renderClips();
   }
 
   // ---------- role ----------
@@ -173,6 +257,9 @@
     const cat = t.closest("[data-cat]"); if (cat) { view.cat = cat.dataset.cat; return refresh(); }
     const ed = t.closest("[data-edit]"); if (ed) { $("songDlg").close(); return openEdit(ed.dataset.edit); }
     if (t.closest("#themeBtn")) return cycleTheme();
+    if (t.id === "recBtn") return toggleRec();
+    const dc = t.closest("[data-delclip]");
+    if (dc) { if (dc.dataset.sure) delClip(dc.dataset.delclip).then(renderClips); else { dc.dataset.sure = "1"; dc.textContent = "Tap again to delete"; } return; }
     if (t.id === "roleBtn") return openRole();
     if (t.id === "addBtn") return openEdit();
     if (t.id === "signOut") return setRole("member");
@@ -202,6 +289,7 @@
   });
 
   document.addEventListener("change", e => {
+    if (e.target.id === "clipFile" && e.target.files.length) { uploadFiles([...e.target.files]); e.target.value = ""; }
     if (e.target.id === "leaderSel") { view.leader = e.target.value; renderList(); }
     if (e.target.id === "onlyKeys") { view.onlyKeys = e.target.checked; renderList(); }
     if (e.target.id === "imp" && e.target.files[0]) {
@@ -213,6 +301,10 @@
   });
 
   $("q").addEventListener("input", e => { view.q = e.target.value; renderList(); });
+  $("songDlg").addEventListener("close", () => {
+    if (rec) { rec.mr.onstop = null; rec.mr.stop(); rec.stream.getTracks().forEach(t => t.stop()); rec = null; }
+    clipUrls.forEach(URL.revokeObjectURL); clipUrls = []; currentSong = null;
+  });
   ["songDlg", "roleDlg", "editDlg"].forEach(id => $(id).addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); }));
 
   applyTheme();
