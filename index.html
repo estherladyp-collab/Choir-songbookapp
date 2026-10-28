@@ -22,7 +22,7 @@
       <div class="slot-r"><button id="roleBtn" class="pill" type="button">Member</button></div>
     </div>
     <p class="eyebrow">Victory Outreach Ministry International</p>
-    <h1>Choir <em>Songbook</em></h1>
+    <h1 id="heroTitle">Created <em>To Worship</em></h1>
     <div class="orn"><i></i></div>
   </div>
 </header>
@@ -30,7 +30,8 @@
 <div class="toolbar">
   <div class="toolbar-in">
     <div class="tabs" role="tablist" aria-label="Section">
-      <button class="tab on" data-tab="songs" type="button" role="tab">Songs</button>
+      <button class="tab on" data-tab="home" type="button" role="tab">Home</button>
+      <button class="tab" data-tab="songs" type="button" role="tab">Songs</button>
       <button class="tab" data-tab="sets" type="button" role="tab">Set Lists</button>
     </div>
     <div class="tools" id="songTools">
@@ -46,7 +47,8 @@
 </div>
 
 <main>
-  <div id="songsView">
+  <div id="homeView"></div>
+  <div id="songsView" hidden>
     <div class="count" id="count"></div>
     <div id="list"></div>
     <div class="empty" id="empty" hidden>No songs found. Try another word.</div>

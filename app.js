@@ -35,7 +35,7 @@
     theme = { auto: "light", light: "dark", dark: "auto" }[theme] || "auto";
     write(THEME, theme); applyTheme();
   }
-  const view = { tab: "songs", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
+  const view = { tab: "home", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
 
   // older saves have one "category" per song; songs now carry a list of categories
   function normalize(list) {
@@ -76,7 +76,9 @@
     $("leaderbar").hidden = !canSeeKeys();
     $("leaderSel").innerHTML = LEADERS.map(l => `<option${l === view.leader ? " selected" : ""}>${esc(l)}</option>`).join("");
     $("onlyKeys").checked = view.onlyKeys;
-    $("addBtn").hidden = view.tab === "sets" ? !canSeeKeys() : !isDirector();
+    $("addBtn").hidden = view.tab === "sets" ? !canSeeKeys() : view.tab === "songs" ? !isDirector() : true;
+    $("homeView").hidden = view.tab !== "home";
+    $("heroTitle").innerHTML = view.tab === "home" ? "Created <em>To Worship</em>" : "Choir <em>Songbook</em>";
     $("addBtn").setAttribute("aria-label", view.tab === "sets" ? "New set list" : "Add song");
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === view.tab));
     $("songTools").hidden = view.tab !== "songs";
@@ -110,7 +112,65 @@
     $("list").innerHTML = html + (cur ? "</ul>" : "");
   }
 
-  const refresh = () => { renderChrome(); renderList(); renderSets(); };
+  const refresh = () => { renderChrome(); renderList(); renderSets(); renderHome(); syncRotation(); };
+
+  // ---------- home: verses and reminders about worship (KJV) ----------
+  const WORSHIP = [
+    { k: "Scripture", t: "This people have I formed for myself; they shall shew forth my praise.", r: "Isaiah 43:21" },
+    { k: "Scripture", t: "Thou art worthy, O Lord, to receive glory and honour and power: for thou hast created all things, and for thy pleasure they are and were created.", r: "Revelation 4:11" },
+    { k: "Scripture", t: "God is a Spirit: and they that worship him must worship him in spirit and in truth.", r: "John 4:24" },
+    { k: "Scripture", t: "Make a joyful noise unto the LORD, all ye lands. Serve the LORD with gladness: come before his presence with singing.", r: "Psalm 100:1-2" },
+    { k: "Reminder", t: "Worship is not a mood you wait for. It is a decision you make before the music even starts." },
+    { k: "Scripture", t: "O come, let us worship and bow down: let us kneel before the LORD our maker.", r: "Psalm 95:6" },
+    { k: "Scripture", t: "I will bless the LORD at all times: his praise shall continually be in my mouth.", r: "Psalm 34:1" },
+    { k: "Reminder", t: "You were not created to impress a room. You were created to lift a name." },
+    { k: "Scripture", t: "Let every thing that hath breath praise the LORD. Praise ye the LORD.", r: "Psalm 150:6" },
+    { k: "Scripture", t: "By him therefore let us offer the sacrifice of praise to God continually, that is, the fruit of our lips giving thanks to his name.", r: "Hebrews 13:15" },
+    { k: "Scripture", t: "But thou art holy, O thou that inhabitest the praises of Israel.", r: "Psalm 22:3" },
+    { k: "Reminder", t: "A choir is not a group of voices. It is a family that learned to say the same thing to God at the same time." },
+    { k: "Scripture", t: "Bless the LORD, O my soul: and all that is within me, bless his holy name.", r: "Psalm 103:1" },
+    { k: "Scripture", t: "Let the word of Christ dwell in you richly in all wisdom; teaching and admonishing one another in psalms and hymns and spiritual songs, singing with grace in your hearts to the Lord.", r: "Colossians 3:16" },
+    { k: "Scripture", t: "O worship the LORD in the beauty of holiness: fear before him, all the earth.", r: "Psalm 96:9" },
+    { k: "Reminder", t: "Sing it like the chains are already off. Paul and Silas did, and the prison doors opened." },
+    { k: "Scripture", t: "And at midnight Paul and Silas prayed, and sang praises unto God: and the prisoners heard them.", r: "Acts 16:25" },
+    { k: "Scripture", t: "Because thy lovingkindness is better than life, my lips shall praise thee.", r: "Psalm 63:3" },
+    { k: "Scripture", t: "O sing unto the LORD a new song; for he hath done marvellous things.", r: "Psalm 98:1" },
+    { k: "Reminder", t: "Practice is where you learn the song. Worship is where you forget yourself. Do both." }
+  ];
+  let wIdx = Math.floor(Date.now() / 86400000) % WORSHIP.length, wTimer = null;
+  const reduceMotion = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function showVerse(animate) {
+    const v = WORSHIP[wIdx], box = $("verse");
+    if (!box) return;
+    box.querySelector(".verse-kind").textContent = v.k;
+    box.querySelector("blockquote").textContent = v.t;
+    box.querySelector("cite").textContent = v.r || "";
+    box.classList.remove("swap"); if (animate) { void box.offsetWidth; box.classList.add("swap"); }
+    document.querySelectorAll("[data-vi]").forEach(d => { d.classList.toggle("on", +d.dataset.vi === wIdx); d.setAttribute("aria-current", +d.dataset.vi === wIdx); });
+  }
+  function stepVerse(n, manual) {
+    wIdx = (wIdx + n + WORSHIP.length) % WORSHIP.length; showVerse(true);
+    if (manual) syncRotation(true);
+  }
+  function syncRotation(restart) {
+    if (wTimer && (restart || view.tab !== "home")) { clearInterval(wTimer); wTimer = null; }
+    if (!wTimer && view.tab === "home" && !reduceMotion())
+      wTimer = setInterval(() => { if (!document.querySelector("dialog[open]")) stepVerse(1); }, 10000);
+  }
+
+  function renderHome() {
+    const today = new Date().toISOString().slice(0, 10);
+    const next = sets.filter(t => t.date && t.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+    $("homeView").innerHTML = `<section class="verse" id="verse" aria-live="off"><div class="verse-kind"></div><blockquote></blockquote><cite></cite></section>
+      <div class="verse-ctl"><button class="mini" data-v="-1" type="button" aria-label="Previous verse">←</button>
+        <div class="dots">${WORSHIP.map((_, i) => `<button class="dot" data-vi="${i}" type="button" aria-label="Verse ${i + 1}"></button>`).join("")}</div>
+        <button class="mini" data-v="1" type="button" aria-label="Next verse">→</button></div>
+      ${next ? `<div class="sec"><h3>Next set list</h3><button class="song nextset" type="button" data-set="${next.id}"><span class="main"><span class="t">${esc(next.name)}</span><span class="c">${esc(setMeta(next))} · ${next.songIds.filter(songById).length} songs</span></span></button></div>` : ""}
+      <div class="homebtns"><button class="btn solid" data-tab="songs" type="button">Open the songbook</button><button class="btn" data-tab="sets" type="button">Set lists</button></div>
+      <p class="homecount">${songs.length} songs · ${sets.length} set ${sets.length === 1 ? "list" : "lists"}</p>`;
+    showVerse(false);
+  }
 
   // ---------- set lists ----------
   const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -380,6 +440,8 @@
     const t = e.target;
     if (t.closest("[data-close]")) { t.closest("dialog").close(); return; }
     const song = t.closest(".song"); if (song && song.dataset.id) return openSong(song.dataset.id);
+    const vs = t.closest("[data-v]"); if (vs) return stepVerse(+vs.dataset.v, true);
+    const vd = t.closest("[data-vi]"); if (vd) { wIdx = +vd.dataset.vi; showVerse(true); return syncRotation(true); }
     const tab = t.closest("[data-tab]"); if (tab) { view.tab = tab.dataset.tab; return refresh(); }
     const st = t.closest("[data-set]"); if (st && st.id !== "copySet") return openSet(st.dataset.set);
     if (t.id === "copySet") return copySet(t.dataset.set);
