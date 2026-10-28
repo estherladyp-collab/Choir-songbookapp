@@ -1,8 +1,9 @@
 (() => {
-  const CATS = [["all", "All"], ["praise", "Praise"], ["worship", "Worship"], ["ministration", "Ministration"]];
+  const DEFAULT_CATS = ["Praise", "Worship", "Ministration", "Wedding", "Funeral", "Anointing Service", "Christmas Songs"];
+  const OLD_CATS = { praise: "Praise", worship: "Worship", ministration: "Ministration" };
   const KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const LEADERS = window.LEADERS;
-  const STORE = "songbook.songs.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
+  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
   const ICONS = {
     auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
     light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -16,6 +17,7 @@
   const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
   let songs = load();
+  let cats = loadCats();
   let role = read(ROLE) || "member";
   let theme = read(THEME) || "auto";
 
@@ -33,11 +35,25 @@
   }
   const view = { cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
 
-  function load() {
-    try { const s = JSON.parse(read(STORE)); if (Array.isArray(s) && s.length) return s; } catch { /* fall through */ }
-    return JSON.parse(JSON.stringify(window.SEED_SONGS));
+  // older saves have one "category" per song; songs now carry a list of categories
+  function normalize(list) {
+    list.forEach(s => {
+      if (!Array.isArray(s.categories)) s.categories = s.category ? [OLD_CATS[s.category] || s.category] : [];
+      delete s.category;
+    });
+    return list;
   }
-  const save = () => write(STORE, JSON.stringify(songs));
+  function load() {
+    try { const s = JSON.parse(read(STORE)); if (Array.isArray(s) && s.length) return normalize(s); } catch { /* fall through */ }
+    return normalize(JSON.parse(JSON.stringify(window.SEED_SONGS)));
+  }
+  function loadCats() {
+    let extra = [];
+    try { const c = JSON.parse(read(CATKEY)); if (Array.isArray(c)) extra = c; } catch { /* defaults only */ }
+    songs.forEach(s => extra.push(...s.categories));
+    return [...new Set([...DEFAULT_CATS, ...extra])];
+  }
+  const save = () => { write(STORE, JSON.stringify(songs)); write(CATKEY, JSON.stringify(cats)); };
   const canSeeKeys = () => role === "leader" || role === "director";
   const isDirector = () => role === "director";
 
@@ -49,7 +65,8 @@
 
   // ---------- list ----------
   function renderChrome() {
-    $("cats").innerHTML = CATS.map(([v, l]) => `<button class="chip${view.cat === v ? " on" : ""}" data-cat="${v}" type="button">${l}</button>`).join("");
+    $("cats").innerHTML = [...cats.map(c => [c, c]), ["all", "All"]]
+      .map(([v, l]) => `<button class="chip${view.cat === v ? " on" : ""}" data-cat="${esc(v)}" type="button">${esc(l)}</button>`).join("");
     $("leaderbar").hidden = !canSeeKeys();
     $("leaderSel").innerHTML = LEADERS.map(l => `<option${l === view.leader ? " selected" : ""}>${esc(l)}</option>`).join("");
     $("onlyKeys").checked = view.onlyKeys;
@@ -62,10 +79,10 @@
   function renderList() {
     const q = view.q.trim().toLowerCase();
     const rows = songs.filter(s => {
-      if (view.cat !== "all" && s.category !== view.cat) return false;
+      if (view.cat !== "all" && !s.categories.includes(view.cat)) return false;
       if (canSeeKeys() && view.onlyKeys && !s.keys[view.leader]) return false;
       if (!q) return true;
-      return (s.title + " " + s.composer + " " + s.lyrics + " " + (s.note || "")).toLowerCase().includes(q);
+      return (s.title + " " + s.composer + " " + s.categories.join(" ") + " " + s.lyrics + " " + (s.note || "")).toLowerCase().includes(q);
     });
     $("count").textContent = rows.length + (rows.length === 1 ? " song" : " songs");
     $("empty").hidden = rows.length > 0;
@@ -75,8 +92,9 @@
       const letter = /\d/.test(first) ? "#" : first;
       if (letter !== cur) { if (cur) html += "</ul>"; html += `<div class="letter">${letter}</div><ul class="list">`; cur = letter; }
       const k = canSeeKeys() ? (s.keys[view.leader] ? `<span class="medal">${esc(s.keys[view.leader])}</span>` : `<span class="medal none">–</span>`) : "";
-      html += `<li><button class="song" type="button" data-id="${s.id}">
-        <span class="main"><span class="t">${esc(s.title)}</span><span class="c">${esc(s.composer || "Composer not added yet")} · <span class="cat">${esc(s.category)}</span></span></span>${k}</button></li>`;
+      html += `<li class="row"><button class="song" type="button" data-id="${s.id}">
+        <span class="main"><span class="t">${esc(s.title)}</span><span class="c">${esc(s.composer || "Composer not added yet")} · <span class="cat">${esc(s.categories.join(" · ") || "No category")}</span></span></span>${k}</button>
+        ${isDirector() ? `<button class="rowedit" data-edit="${s.id}" type="button" aria-label="Edit ${esc(s.title)}" title="Edit or delete"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>` : ""}</li>`;
     });
     $("list").innerHTML = html + (cur ? "</ul>" : "");
   }
@@ -181,7 +199,7 @@
       LEADERS.map(l => `<div class="keybox${s.keys[l] ? "" : " none"}"><b>${esc(s.keys[l] || "–")}</b><span>${esc(l)}</span></div>`).join("")}</div></div>` : "";
 
     $("songBody").innerHTML = `<div class="sheet">
-      <div class="sheet-head"><div style="flex:1"><h2>${esc(s.title)}</h2><div class="sub">${esc(s.composer || "Composer not added yet")} · ${esc(s.category)}</div></div>
+      <div class="sheet-head"><div style="flex:1"><h2>${esc(s.title)}</h2><div class="sub">${esc(s.composer || "Composer not added yet")}${s.categories.length ? " · " + esc(s.categories.join(" · ")) : ""}</div></div>
         ${isDirector() ? `<button class="btn" data-edit="${s.id}" type="button">Edit</button>` : ""}
         <button class="x" data-close type="button" aria-label="Close">✕</button></div>
       ${s.needsCheck ? `<p class="note" style="margin-top:14px">Title typed from the handwritten song list. Please double-check the spelling.</p>` : ""}
@@ -209,7 +227,7 @@
         ${isDirector() ? `<div class="sec"><h3>Backup</h3><p class="muted">Edits are saved on this device. Download a backup file to keep or share them.</p>
         <div class="actions"><button class="btn" id="exp" type="button">Download backup</button>
         <label class="btn" style="margin:0">Restore backup<input id="imp" type="file" accept="application/json" hidden></label>
-        <button class="btn danger" id="reset" type="button">Reset to original list</button></div></div>` : ""}`}
+        <button class="btn danger" id="reset" type="button">Reset to original list</button></div><div class="msg" id="impMsg"></div></div>` : ""}`}
     </div>`;
     d.showModal();
   }
@@ -218,13 +236,15 @@
 
   // ---------- edit ----------
   function openEdit(id) {
-    const s = id ? songs.find(x => x.id === id) : { title: "", composer: "", category: "praise", youtube: "", audio: "", lyrics: "", keys: {}, note: "" };
+    const s = id ? songs.find(x => x.id === id) : { title: "", composer: "", categories: [], youtube: "", audio: "", lyrics: "", keys: {}, note: "" };
     const d = $("editDlg");
     d.innerHTML = `<form class="sheet" id="editForm" data-id="${id || ""}">
       <div class="sheet-head"><h2>${id ? "Edit song" : "New song"}</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>
       <label>Title</label><input name="title" required value="${esc(s.title)}">
-      <div class="grid2"><div><label>Composer / artist</label><input name="composer" value="${esc(s.composer)}"></div>
-      <div><label>Category</label><select name="category">${CATS.slice(1).map(([v, l]) => `<option value="${v}"${s.category === v ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
+      <label>Composer / artist</label><input name="composer" value="${esc(s.composer)}">
+      <label>Categories</label>
+      <div class="cbxs">${cats.map(c => `<label class="cbx"><input type="checkbox" name="cat" value="${esc(c)}"${s.categories.includes(c) ? " checked" : ""}>${esc(c)}</label>`).join("")}</div>
+      <input name="newcat" placeholder="Add a new category (optional)">
       <label>YouTube link</label><input name="youtube" inputmode="url" placeholder="https://youtu.be/..." value="${esc(s.youtube)}">
       <label>Audio file link (mp3)</label><input name="audio" inputmode="url" placeholder="https://..." value="${esc(s.audio)}">
       <label>Keys by song leader</label>
@@ -240,8 +260,10 @@
     const f = new FormData(form), id = form.dataset.id;
     const keys = {};
     LEADERS.forEach(l => { if (f.get("key_" + l)) keys[l] = f.get("key_" + l); });
-    const data = { title: f.get("title").trim(), composer: f.get("composer").trim(), category: f.get("category"),
+    const data = { title: f.get("title").trim(), composer: f.get("composer").trim(), categories: f.getAll("cat"),
       youtube: f.get("youtube").trim(), audio: f.get("audio").trim(), lyrics: f.get("lyrics"), note: f.get("note").trim(), keys, needsCheck: false };
+    const nc = f.get("newcat").trim();
+    if (nc) { const known = cats.find(c => c.toLowerCase() === nc.toLowerCase()); if (!known) cats.push(nc); if (!data.categories.includes(known || nc)) data.categories.push(known || nc); }
     if (id) Object.assign(songs.find(x => x.id === id), data);
     else songs.push({ id: "s" + Date.now().toString(36), ...data });
     songs.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
@@ -264,16 +286,19 @@
     if (t.id === "addBtn") return openEdit();
     if (t.id === "signOut") return setRole("member");
     if (t.id === "delSong") {
+      if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Tap again to delete for good"; return; }
       const id = $("editForm").dataset.id;
-      if (confirm("Delete this song for good?")) { songs = songs.filter(x => x.id !== id); save(); $("editDlg").close(); refresh(); }
+      songs = songs.filter(x => x.id !== id); save(); $("editDlg").close(); refresh();
+      allClips().then(cl => Promise.all(cl.filter(c => c.songId === id).map(c => delClip(c.id)))).catch(() => {});
     }
     if (t.id === "exp") {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(songs, null, 1)], { type: "application/json" }));
       a.download = "choir-songbook-backup.json"; a.click(); URL.revokeObjectURL(a.href);
     }
-    if (t.id === "reset" && confirm("Throw away all edits on this device and go back to the original list?")) {
-      songs = JSON.parse(JSON.stringify(window.SEED_SONGS)); save(); $("roleDlg").close(); refresh();
+    if (t.id === "reset") {
+      if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Tap again: this removes all edits"; return; }
+      songs = normalize(JSON.parse(JSON.stringify(window.SEED_SONGS))); cats = loadCats(); save(); $("roleDlg").close(); refresh();
     }
   });
 
@@ -294,8 +319,8 @@
     if (e.target.id === "onlyKeys") { view.onlyKeys = e.target.checked; renderList(); }
     if (e.target.id === "imp" && e.target.files[0]) {
       e.target.files[0].text().then(txt => {
-        try { const s = JSON.parse(txt); if (!Array.isArray(s)) throw 0; songs = s; save(); $("roleDlg").close(); refresh(); }
-        catch { alert("That file is not a songbook backup."); }
+        try { const s = JSON.parse(txt); if (!Array.isArray(s)) throw 0; songs = normalize(s); cats = loadCats(); save(); $("roleDlg").close(); refresh(); }
+        catch { const m = $("impMsg"); if (m) m.textContent = "That file is not a songbook backup."; }
       });
     }
   });
