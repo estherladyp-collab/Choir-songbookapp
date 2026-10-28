@@ -35,7 +35,7 @@
     theme = { auto: "light", light: "dark", dark: "auto" }[theme] || "auto";
     write(THEME, theme); applyTheme();
   }
-  const view = { tab: "home", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
+  const view = { tab: "songs", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
 
   // older saves have one "category" per song; songs now carry a list of categories
   function normalize(list) {
@@ -76,9 +76,7 @@
     $("leaderbar").hidden = !canSeeKeys();
     $("leaderSel").innerHTML = LEADERS.map(l => `<option${l === view.leader ? " selected" : ""}>${esc(l)}</option>`).join("");
     $("onlyKeys").checked = view.onlyKeys;
-    $("addBtn").hidden = view.tab === "sets" ? !canSeeKeys() : view.tab === "songs" ? !isDirector() : true;
-    $("homeView").hidden = view.tab !== "home";
-    $("heroTitle").innerHTML = view.tab === "home" ? "Created <em>To Worship</em>" : "Choir <em>Songbook</em>";
+    $("addBtn").hidden = view.tab === "sets" ? false : !isDirector();
     $("addBtn").setAttribute("aria-label", view.tab === "sets" ? "New set list" : "Add song");
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === view.tab));
     $("songTools").hidden = view.tab !== "songs";
@@ -112,9 +110,8 @@
     $("list").innerHTML = html + (cur ? "</ul>" : "");
   }
 
-  const refresh = () => { renderChrome(); renderList(); renderSets(); renderHome(); syncRotation(); };
+  const refresh = () => { renderChrome(); renderList(); renderSets(); };
 
-  // ---------- home: verses and reminders about worship (KJV) ----------
   const WORSHIP = [
     { k: "Scripture", t: "This people have I formed for myself; they shall shew forth my praise.", r: "Isaiah 43:21" },
     { k: "Scripture", t: "Thou art worthy, O Lord, to receive glory and honour and power: for thou hast created all things, and for thy pleasure they are and were created.", r: "Revelation 4:11" },
@@ -137,39 +134,54 @@
     { k: "Scripture", t: "O sing unto the LORD a new song; for he hath done marvellous things.", r: "Psalm 98:1" },
     { k: "Reminder", t: "Practice is where you learn the song. Worship is where you forget yourself. Do both." }
   ];
-  let wIdx = Math.floor(Date.now() / 86400000) % WORSHIP.length, wTimer = null;
+  let wIdx = Math.floor(Date.now() / 86400000) % WORSHIP.length, wTimer = null, raf = 0;
   const reduceMotion = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function showVerse(animate) {
-    const v = WORSHIP[wIdx], box = $("verse");
-    if (!box) return;
+    const v = WORSHIP[wIdx], box = $("cvVerse");
     box.querySelector(".verse-kind").textContent = v.k;
     box.querySelector("blockquote").textContent = v.t;
     box.querySelector("cite").textContent = v.r || "";
     box.classList.remove("swap"); if (animate) { void box.offsetWidth; box.classList.add("swap"); }
-    document.querySelectorAll("[data-vi]").forEach(d => { d.classList.toggle("on", +d.dataset.vi === wIdx); d.setAttribute("aria-current", +d.dataset.vi === wIdx); });
   }
-  function stepVerse(n, manual) {
-    wIdx = (wIdx + n + WORSHIP.length) % WORSHIP.length; showVerse(true);
-    if (manual) syncRotation(true);
+  function stepVerse(manual) {
+    wIdx = (wIdx + 1) % WORSHIP.length; showVerse(true);
+    if (manual) startRotation();
   }
-  function syncRotation(restart) {
-    if (wTimer && (restart || view.tab !== "home")) { clearInterval(wTimer); wTimer = null; }
-    if (!wTimer && view.tab === "home" && !reduceMotion())
-      wTimer = setInterval(() => { if (!document.querySelector("dialog[open]")) stepVerse(1); }, 10000);
+  function stopRotation() { clearInterval(wTimer); wTimer = null; }
+  function startRotation() { stopRotation(); if (!reduceMotion()) wTimer = setInterval(() => stepVerse(false), 9000); }
+
+  function startDust() {
+    const cv = $("dust");
+    if (!cv || !cv.getContext || reduceMotion()) return;
+    const ctx = cv.getContext("2d"), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * dpr; cv.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const dots = Array.from({ length: 46 }, () => ({ x: Math.random() * w, y: Math.random() * h, r: 0.6 + Math.random() * 2, v: 0.12 + Math.random() * 0.35, p: Math.random() * 6.28 }));
+    const frame = t => {
+      ctx.clearRect(0, 0, w, h);
+      dots.forEach(d => {
+        d.y -= d.v; if (d.y < -4) { d.y = h + 4; d.x = Math.random() * w; }
+        ctx.beginPath(); ctx.fillStyle = `rgba(242,212,138,${0.25 + 0.55 * Math.abs(Math.sin(t / 1200 + d.p))})`;
+        ctx.arc(d.x, d.y, d.r, 0, 6.283); ctx.fill();
+      });
+      raf = requestAnimationFrame(frame);
+    };
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
 
-  function renderHome() {
-    const today = new Date().toISOString().slice(0, 10);
-    const next = sets.filter(t => t.date && t.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
-    $("homeView").innerHTML = `<section class="verse" id="verse" aria-live="off"><div class="verse-kind"></div><blockquote></blockquote><cite></cite></section>
-      <div class="verse-ctl"><button class="mini" data-v="-1" type="button" aria-label="Previous verse">←</button>
-        <div class="dots">${WORSHIP.map((_, i) => `<button class="dot" data-vi="${i}" type="button" aria-label="Verse ${i + 1}"></button>`).join("")}</div>
-        <button class="mini" data-v="1" type="button" aria-label="Next verse">→</button></div>
-      ${next ? `<div class="sec"><h3>Next set list</h3><button class="song nextset" type="button" data-set="${next.id}"><span class="main"><span class="t">${esc(next.name)}</span><span class="c">${esc(setMeta(next))} · ${next.songIds.filter(songById).length} songs</span></span></button></div>` : ""}
-      <div class="homebtns"><button class="btn solid" data-tab="songs" type="button">Open the songbook</button><button class="btn" data-tab="sets" type="button">Set lists</button></div>
-      <p class="homecount">${songs.length} songs · ${sets.length} set ${sets.length === 1 ? "list" : "lists"}</p>`;
-    showVerse(false);
+  const setInert = on => ["header.hero", ".toolbar", "main", "#addBtn"].forEach(q => { const el = document.querySelector(q); if (el) el.inert = on; });
+
+  function openCover() {
+    const c = $("cover");
+    c.hidden = false; c.classList.remove("leaving");
+    setInert(true); showVerse(false); startRotation(); startDust();
+    $("enterBtn").focus({ preventScroll: true });
+  }
+  function closeCover() {
+    const c = $("cover");
+    c.classList.add("leaving"); stopRotation(); setInert(false);
+    setTimeout(() => { c.hidden = true; cancelAnimationFrame(raf); }, reduceMotion() ? 0 : 500);
   }
 
   // ---------- set lists ----------
@@ -179,10 +191,11 @@
 
   function renderSets() {
     const list = sets.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.created - a.created);
-    $("setsView").innerHTML = list.length
+    const newBtn = `<div class="newset"><button class="btn solid" data-newset type="button">+ New set list</button></div>`;
+    $("setsView").innerHTML = newBtn + (list.length
       ? `<div class="count">${list.length} set ${list.length === 1 ? "list" : "lists"}</div><ul class="list">${list.map(t => `<li class="row"><button class="song" type="button" data-set="${t.id}">
           <span class="main"><span class="t">${esc(t.name)}</span><span class="c">${esc(setMeta(t))} · ${t.songIds.filter(songById).length} songs</span></span></button></li>`).join("")}</ul>`
-      : `<div class="empty">No set lists yet.${canSeeKeys() ? "<br>Tap + to build the first one." : ""}</div>`;
+      : `<div class="empty">No set lists yet.${canSeeKeys() ? "<br>Tap + to build the first one." : "<br>Song leaders can create them."}</div>`);
   }
 
   function setText(t) {
@@ -217,6 +230,8 @@
       const ta = out.querySelector("textarea"); ta.value = text; ta.focus(); ta.select();
     }
   }
+
+  const newSet = () => canSeeKeys() ? openSetEdit() : openRole("Enter your song leader or director code to create set lists.");
 
   function openSetEdit(id) {
     const old = id && sets.find(x => x.id === id);
@@ -379,10 +394,10 @@
   }
 
   // ---------- role ----------
-  function openRole() {
+  function openRole(msg) {
     const d = $("roleDlg");
     d.innerHTML = `<div class="sheet"><div class="sheet-head"><h2>Who is using the book?</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>
-      ${role === "member" ? `<form id="roleForm"><label for="code">Leader or Director code</label>
+      ${role === "member" ? `${msg ? `<p class="note">${esc(msg)}</p>` : ""}<form id="roleForm"><label for="code">Leader or Director code</label>
         <input id="code" type="password" autocomplete="off" placeholder="Enter code"><div class="msg" id="roleMsg"></div>
         <div class="actions"><button class="btn solid" type="submit">Unlock</button></div></form>
         <p class="muted" style="margin-top:20px">Members see the songs, lyrics and listening links. Song leaders also see the keys. The director can edit everything.</p>`
@@ -440,8 +455,6 @@
     const t = e.target;
     if (t.closest("[data-close]")) { t.closest("dialog").close(); return; }
     const song = t.closest(".song"); if (song && song.dataset.id) return openSong(song.dataset.id);
-    const vs = t.closest("[data-v]"); if (vs) return stepVerse(+vs.dataset.v, true);
-    const vd = t.closest("[data-vi]"); if (vd) { wIdx = +vd.dataset.vi; showVerse(true); return syncRotation(true); }
     const tab = t.closest("[data-tab]"); if (tab) { view.tab = tab.dataset.tab; return refresh(); }
     const st = t.closest("[data-set]"); if (st && st.id !== "copySet") return openSet(st.dataset.set);
     if (t.id === "copySet") return copySet(t.dataset.set);
@@ -466,7 +479,11 @@
     const dc = t.closest("[data-delclip]");
     if (dc) { if (dc.dataset.sure) delClip(dc.dataset.delclip).then(renderClips); else { dc.dataset.sure = "1"; dc.textContent = "Tap again to delete"; } return; }
     if (t.id === "roleBtn") return openRole();
-    if (t.id === "addBtn") return view.tab === "sets" ? openSetEdit() : openEdit();
+    if (t.id === "addBtn") return view.tab === "sets" ? newSet() : openEdit();
+    if (t.closest("[data-newset]")) return newSet();
+    if (t.closest("[data-cover]")) return openCover();
+    if (t.closest("#enterBtn")) return closeCover();
+    if (t.closest("#cvVerse")) return stepVerse(true);
     if (t.id === "signOut") return setRole("member");
     if (t.id === "delSong") {
       if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Tap again to delete for good"; return; }
@@ -523,5 +540,6 @@
 
   applyTheme();
   refresh();
+  openCover();
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

@@ -22,7 +22,7 @@
       <div class="slot-r"><button id="roleBtn" class="pill" type="button">Member</button></div>
     </div>
     <p class="eyebrow">Victory Outreach Ministry International</p>
-    <h1 id="heroTitle">Created <em>To Worship</em></h1>
+    <h1>Choir <em>Songbook</em></h1>
     <div class="orn"><i></i></div>
   </div>
 </header>
@@ -30,8 +30,8 @@
 <div class="toolbar">
   <div class="toolbar-in">
     <div class="tabs" role="tablist" aria-label="Section">
-      <button class="tab on" data-tab="home" type="button" role="tab">Home</button>
-      <button class="tab" data-tab="songs" type="button" role="tab">Songs</button>
+      <button class="tab" data-cover type="button">Home</button>
+      <button class="tab on" data-tab="songs" type="button" role="tab">Songs</button>
       <button class="tab" data-tab="sets" type="button" role="tab">Set Lists</button>
     </div>
     <div class="tools" id="songTools">
@@ -47,8 +47,7 @@
 </div>
 
 <main>
-  <div id="homeView"></div>
-  <div id="songsView" hidden>
+  <div id="songsView">
     <div class="count" id="count"></div>
     <div id="list"></div>
     <div class="empty" id="empty" hidden>No songs found. Try another word.</div>
@@ -57,6 +56,19 @@
 </main>
 
 <button id="addBtn" class="fab" type="button" hidden aria-label="Add">+</button>
+
+<section id="cover" class="cover" role="dialog" aria-modal="true" aria-label="Welcome" hidden>
+  <div class="cv-bg"></div>
+  <canvas id="dust" class="cv-dust" aria-hidden="true"></canvas>
+  <div class="cv-in">
+    <div class="cv-logo"><img src="assets/logo.png" alt="Victory Outreach Ministry International logo"></div>
+    <p class="cv-eyebrow">Victory Outreach Ministry International</p>
+    <h2 class="cv-title"><span>Created</span> <em>To Worship</em></h2>
+    <div class="orn"><i></i></div>
+    <section class="cv-verse" id="cvVerse" aria-live="off" title="Tap for the next verse"><div class="verse-kind"></div><blockquote></blockquote><cite></cite></section>
+    <button id="enterBtn" class="btn solid cv-btn" type="button">Enter the Songbook</button>
+  </div>
+</section>
 
 <dialog id="songDlg"><div id="songBody"></div></dialog>
 <dialog id="setDlg"></dialog>
