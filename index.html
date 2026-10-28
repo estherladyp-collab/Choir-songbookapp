@@ -17,9 +17,9 @@
 <header class="hero">
   <div class="hero-in">
     <div class="hero-top">
+      <div class="slot-l"><button id="themeBtn" class="pill icon" type="button" aria-label="Appearance"></button></div>
       <img class="logo" src="assets/logo.png" alt="Victory Outreach Ministry International logo">
-      <button id="themeBtn" class="pill icon" type="button" aria-label="Appearance"></button>
-      <button id="roleBtn" class="pill" type="button">Member</button>
+      <div class="slot-r"><button id="roleBtn" class="pill" type="button">Member</button></div>
     </div>
     <p class="eyebrow">Victory Outreach Ministry International</p>
     <h1>Choir <em>Songbook</em></h1>
@@ -29,25 +29,35 @@
 
 <div class="toolbar">
   <div class="toolbar-in">
-    <div class="search"><input id="q" type="search" placeholder="Search title, composer or lyrics" autocomplete="off" aria-label="Search songs"></div>
-    <div class="chips" id="cats" role="tablist" aria-label="Category"></div>
-    <div class="leaderbar" id="leaderbar" hidden>
-      <label for="leaderSel">Keys for</label>
-      <select id="leaderSel"></select>
-      <label class="check"><input type="checkbox" id="onlyKeys"> only songs with a key</label>
+    <div class="tabs" role="tablist" aria-label="Section">
+      <button class="tab on" data-tab="songs" type="button" role="tab">Songs</button>
+      <button class="tab" data-tab="sets" type="button" role="tab">Set Lists</button>
+    </div>
+    <div class="tools" id="songTools">
+      <div class="search"><input id="q" type="search" placeholder="Search title, composer or lyrics" autocomplete="off" aria-label="Search songs"></div>
+      <div class="chips" id="cats" role="tablist" aria-label="Category"></div>
+      <div class="leaderbar" id="leaderbar" hidden>
+        <label for="leaderSel">Keys for</label>
+        <select id="leaderSel"></select>
+        <label class="check"><input type="checkbox" id="onlyKeys"> only songs with a key</label>
+      </div>
     </div>
   </div>
 </div>
 
 <main>
-  <div class="count" id="count"></div>
-  <div id="list"></div>
-  <div class="empty" id="empty" hidden>No songs found. Try another word.</div>
+  <div id="songsView">
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+    <div class="empty" id="empty" hidden>No songs found. Try another word.</div>
+  </div>
+  <div id="setsView" hidden></div>
 </main>
 
-<button id="addBtn" class="fab" type="button" hidden aria-label="Add song">+</button>
+<button id="addBtn" class="fab" type="button" hidden aria-label="Add">+</button>
 
 <dialog id="songDlg"><div id="songBody"></div></dialog>
+<dialog id="setDlg"></dialog>
 <dialog id="roleDlg"></dialog>
 <dialog id="editDlg"></dialog>
 

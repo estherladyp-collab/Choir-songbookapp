@@ -3,7 +3,7 @@
   const OLD_CATS = { praise: "Praise", worship: "Worship", ministration: "Ministration" };
   const KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const LEADERS = window.LEADERS;
-  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
+  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", SETKEY = "songbook.sets.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
   const ICONS = {
     auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
     light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -18,6 +18,8 @@
 
   let songs = load();
   let cats = loadCats();
+  let sets = loadSets();
+  let draft = null;
   let role = read(ROLE) || "member";
   let theme = read(THEME) || "auto";
 
@@ -33,7 +35,7 @@
     theme = { auto: "light", light: "dark", dark: "auto" }[theme] || "auto";
     write(THEME, theme); applyTheme();
   }
-  const view = { cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
+  const view = { tab: "songs", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
 
   // older saves have one "category" per song; songs now carry a list of categories
   function normalize(list) {
@@ -53,7 +55,11 @@
     songs.forEach(s => extra.push(...s.categories));
     return [...new Set([...DEFAULT_CATS, ...extra])];
   }
-  const save = () => { write(STORE, JSON.stringify(songs)); write(CATKEY, JSON.stringify(cats)); };
+  function loadSets() {
+    try { const x = JSON.parse(read(SETKEY)); if (Array.isArray(x)) return x; } catch { /* none yet */ }
+    return [];
+  }
+  const save = () => { write(STORE, JSON.stringify(songs)); write(CATKEY, JSON.stringify(cats)); write(SETKEY, JSON.stringify(sets)); };
   const canSeeKeys = () => role === "leader" || role === "director";
   const isDirector = () => role === "director";
 
@@ -70,7 +76,12 @@
     $("leaderbar").hidden = !canSeeKeys();
     $("leaderSel").innerHTML = LEADERS.map(l => `<option${l === view.leader ? " selected" : ""}>${esc(l)}</option>`).join("");
     $("onlyKeys").checked = view.onlyKeys;
-    $("addBtn").hidden = !isDirector();
+    $("addBtn").hidden = view.tab === "sets" ? !canSeeKeys() : !isDirector();
+    $("addBtn").setAttribute("aria-label", view.tab === "sets" ? "New set list" : "Add song");
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === view.tab));
+    $("songTools").hidden = view.tab !== "songs";
+    $("songsView").hidden = view.tab !== "songs";
+    $("setsView").hidden = view.tab !== "sets";
     const rb = $("roleBtn");
     rb.textContent = role === "director" ? "Director" : role === "leader" ? "Song Leader" : "Member";
     rb.classList.toggle("on", role !== "member");
@@ -99,7 +110,100 @@
     $("list").innerHTML = html + (cur ? "</ul>" : "");
   }
 
-  const refresh = () => { renderChrome(); renderList(); };
+  const refresh = () => { renderChrome(); renderList(); renderSets(); };
+
+  // ---------- set lists ----------
+  const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+  const setMeta = t => [t.type, fmtDate(t.date), t.leader ? "Leader: " + t.leader : ""].filter(Boolean).join(" · ");
+  const songById = id => songs.find(x => x.id === id);
+
+  function renderSets() {
+    const list = sets.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.created - a.created);
+    $("setsView").innerHTML = list.length
+      ? `<div class="count">${list.length} set ${list.length === 1 ? "list" : "lists"}</div><ul class="list">${list.map(t => `<li class="row"><button class="song" type="button" data-set="${t.id}">
+          <span class="main"><span class="t">${esc(t.name)}</span><span class="c">${esc(setMeta(t))} · ${t.songIds.filter(songById).length} songs</span></span></button></li>`).join("")}</ul>`
+      : `<div class="empty">No set lists yet.${canSeeKeys() ? "<br>Tap + to build the first one." : ""}</div>`;
+  }
+
+  function setText(t) {
+    const withKeys = canSeeKeys() && t.leader;
+    const lines = t.songIds.map(songById).filter(Boolean).map((s, i) => `${i + 1}. ${s.title}${withKeys && s.keys[t.leader] ? " (" + s.keys[t.leader] + ")" : ""}`);
+    return `${t.name}\n${setMeta(t)}\n\n${lines.join("\n")}${t.note ? "\n\n" + t.note : ""}`;
+  }
+
+  function openSet(id) {
+    const t = sets.find(x => x.id === id);
+    if (!t) return;
+    const rows = t.songIds.map(songById).filter(Boolean).map((s, i) => {
+      const k = canSeeKeys() && t.leader ? (s.keys[t.leader] ? `<span class="medal">${esc(s.keys[t.leader])}</span>` : `<span class="medal none">–</span>`) : "";
+      return `<li class="row"><button class="song" type="button" data-id="${s.id}"><span class="no">${i + 1}</span>
+        <span class="main"><span class="t">${esc(s.title)}</span><span class="c">${esc(s.composer || "Composer not added yet")}</span></span>${k}</button></li>`;
+    }).join("");
+    $("setDlg").innerHTML = `<div class="sheet"><div class="sheet-head"><div style="flex:1"><h2>${esc(t.name)}</h2><div class="sub">${esc(setMeta(t))}</div></div>
+      ${canSeeKeys() ? `<button class="btn" data-editset="${t.id}" type="button">Edit</button>` : ""}
+      <button class="x" data-close type="button" aria-label="Close">✕</button></div>
+      ${t.note ? `<p class="note">${esc(t.note)}</p>` : ""}
+      <div class="sec"><h3>Songs in this set</h3>${rows ? `<ol class="list setlist">${rows}</ol>` : `<p class="muted">No songs added yet.</p>`}</div>
+      <div class="sec"><div class="btns"><button class="btn solid" id="copySet" data-set="${t.id}" type="button">Copy as text</button></div>
+      <div id="copyOut"></div></div></div>`;
+    if (!$("setDlg").open) $("setDlg").showModal();
+  }
+
+  async function copySet(id) {
+    const t = sets.find(x => x.id === id), text = setText(t), out = $("copyOut");
+    try { await navigator.clipboard.writeText(text); out.innerHTML = `<p class="muted">Copied. You can paste it into WhatsApp.</p>`; }
+    catch {
+      out.innerHTML = `<p class="muted">Select the text below and copy it.</p><textarea class="copybox" readonly></textarea>`;
+      const ta = out.querySelector("textarea"); ta.value = text; ta.focus(); ta.select();
+    }
+  }
+
+  function openSetEdit(id) {
+    const old = id && sets.find(x => x.id === id);
+    draft = old ? JSON.parse(JSON.stringify(old)) : { name: "", type: "Worship", date: "", leader: "", note: "", songIds: [] };
+    $("editDlg").innerHTML = `<form class="sheet" id="setForm" data-id="${id || ""}">
+      <div class="sheet-head"><h2>${id ? "Edit set list" : "New set list"}</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>
+      <label for="setName">Name</label><input id="setName" name="name" required placeholder="e.g. Sunday Worship" value="${esc(draft.name)}">
+      <div class="grid2"><div><label for="setType">Type</label><select id="setType" name="type">${cats.map(c => `<option${c === draft.type ? " selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
+      <div><label for="setDate">Date</label><input id="setDate" name="date" type="date" value="${esc(draft.date)}"></div></div>
+      <label for="setLeader">Song leader (shows their keys)</label>
+      <select id="setLeader" name="leader"><option value="">–</option>${LEADERS.map(l => `<option${l === draft.leader ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
+      <label>Songs in this set</label><div id="picked"></div>
+      <label for="pickQ">Add songs</label>
+      <div class="grid2"><input id="pickQ" type="search" placeholder="Search songs" autocomplete="off">
+      <select id="pickCat" aria-label="Category"><option value="all">All categories</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select></div>
+      <div id="pickList"></div>
+      <label for="setNote">Note (optional)</label><input id="setNote" name="note" value="${esc(draft.note || "")}">
+      <div class="actions"><button class="btn solid" type="submit">Save set list</button>
+      ${id ? `<button class="btn danger" id="delSet" type="button">Delete</button>` : ""}</div></form>`;
+    $("editDlg").showModal();
+    renderPicked(); renderPick();
+  }
+
+  function renderPicked() {
+    const rows = draft.songIds.map(songById).filter(Boolean);
+    draft.songIds = rows.map(s => s.id);
+    $("picked").innerHTML = rows.length ? `<ol class="picked">${rows.map((s, i) => `<li><span class="no">${i + 1}</span><span class="pt">${esc(s.title)}</span>
+      <button type="button" class="mini" data-up="${i}" aria-label="Move up"${i === 0 ? " disabled" : ""}>↑</button>
+      <button type="button" class="mini" data-down="${i}" aria-label="Move down"${i === rows.length - 1 ? " disabled" : ""}>↓</button>
+      <button type="button" class="mini" data-rm="${i}" aria-label="Remove">✕</button></li>`).join("")}</ol>` : `<p class="muted">Nothing added yet. Pick songs below.</p>`;
+  }
+
+  function renderPick() {
+    const q = ($("pickQ").value || "").trim().toLowerCase(), c = $("pickCat").value;
+    const found = songs.filter(s => (c === "all" || s.categories.includes(c)) && (!q || (s.title + " " + s.composer).toLowerCase().includes(q)));
+    $("pickList").innerHTML = found.slice(0, 40).map(s => { const on = draft.songIds.includes(s.id);
+      return `<button type="button" class="pick${on ? " on" : ""}" data-pick="${s.id}"><span>${esc(s.title)}<small>${esc(s.composer)}</small></span><b>${on ? "✓" : "+"}</b></button>`; }).join("")
+      + (found.length > 40 ? `<p class="muted">Showing 40 of ${found.length}. Type to narrow it down.</p>` : found.length ? "" : `<p class="muted">No songs found.</p>`);
+  }
+
+  function saveSet(form) {
+    const f = new FormData(form), id = form.dataset.id, old = id && sets.find(x => x.id === id);
+    const t = { id: id || "t" + Date.now().toString(36), name: f.get("name").trim(), type: f.get("type"), date: f.get("date"), leader: f.get("leader"),
+      note: f.get("note").trim(), songIds: draft.songIds, created: old ? old.created : Date.now() };
+    if (old) Object.assign(old, t); else sets.push(t);
+    save(); $("editDlg").close(); refresh(); openSet(t.id);
+  }
 
   // ---------- recordings (saved on this device in IndexedDB) ----------
   const idb = () => new Promise((res, rej) => {
@@ -275,7 +379,24 @@
   document.addEventListener("click", e => {
     const t = e.target;
     if (t.closest("[data-close]")) { t.closest("dialog").close(); return; }
-    const song = t.closest(".song"); if (song) return openSong(song.dataset.id);
+    const song = t.closest(".song"); if (song && song.dataset.id) return openSong(song.dataset.id);
+    const tab = t.closest("[data-tab]"); if (tab) { view.tab = tab.dataset.tab; return refresh(); }
+    const st = t.closest("[data-set]"); if (st && st.id !== "copySet") return openSet(st.dataset.set);
+    if (t.id === "copySet") return copySet(t.dataset.set);
+    const es = t.closest("[data-editset]"); if (es) { $("setDlg").close(); return openSetEdit(es.dataset.editset); }
+    const pk = t.closest("[data-pick]");
+    if (pk) { const i = draft.songIds.indexOf(pk.dataset.pick); if (i < 0) draft.songIds.push(pk.dataset.pick); else draft.songIds.splice(i, 1); renderPicked(); return renderPick(); }
+    const mv = t.closest("[data-up],[data-down],[data-rm]");
+    if (mv) {
+      const a = draft.songIds;
+      if (mv.dataset.rm !== undefined) a.splice(+mv.dataset.rm, 1);
+      else { const i = +(mv.dataset.up ?? mv.dataset.down), j = mv.dataset.up !== undefined ? i - 1 : i + 1; [a[i], a[j]] = [a[j], a[i]]; }
+      renderPicked(); return renderPick();
+    }
+    if (t.id === "delSet") {
+      if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Tap again to delete"; return; }
+      const id = $("setForm").dataset.id; sets = sets.filter(x => x.id !== id); save(); $("editDlg").close(); refresh(); return;
+    }
     const cat = t.closest("[data-cat]"); if (cat) { view.cat = cat.dataset.cat; return refresh(); }
     const ed = t.closest("[data-edit]"); if (ed) { $("songDlg").close(); return openEdit(ed.dataset.edit); }
     if (t.closest("#themeBtn")) return cycleTheme();
@@ -283,17 +404,17 @@
     const dc = t.closest("[data-delclip]");
     if (dc) { if (dc.dataset.sure) delClip(dc.dataset.delclip).then(renderClips); else { dc.dataset.sure = "1"; dc.textContent = "Tap again to delete"; } return; }
     if (t.id === "roleBtn") return openRole();
-    if (t.id === "addBtn") return openEdit();
+    if (t.id === "addBtn") return view.tab === "sets" ? openSetEdit() : openEdit();
     if (t.id === "signOut") return setRole("member");
     if (t.id === "delSong") {
       if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Tap again to delete for good"; return; }
       const id = $("editForm").dataset.id;
-      songs = songs.filter(x => x.id !== id); save(); $("editDlg").close(); refresh();
+      songs = songs.filter(x => x.id !== id); sets.forEach(t => { t.songIds = t.songIds.filter(x => x !== id); }); save(); $("editDlg").close(); refresh();
       allClips().then(cl => Promise.all(cl.filter(c => c.songId === id).map(c => delClip(c.id)))).catch(() => {});
     }
     if (t.id === "exp") {
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(songs, null, 1)], { type: "application/json" }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ songs, sets, cats }, null, 1)], { type: "application/json" }));
       a.download = "choir-songbook-backup.json"; a.click(); URL.revokeObjectURL(a.href);
     }
     if (t.id === "reset") {
@@ -311,26 +432,32 @@
       else $("roleMsg").textContent = "That code is not right.";
     }
     if (e.target.id === "editForm") saveEdit(e.target);
+    if (e.target.id === "setForm") saveSet(e.target);
   });
 
   document.addEventListener("change", e => {
     if (e.target.id === "clipFile" && e.target.files.length) { uploadFiles([...e.target.files]); e.target.value = ""; }
+    if (e.target.id === "pickCat") renderPick();
     if (e.target.id === "leaderSel") { view.leader = e.target.value; renderList(); }
     if (e.target.id === "onlyKeys") { view.onlyKeys = e.target.checked; renderList(); }
     if (e.target.id === "imp" && e.target.files[0]) {
       e.target.files[0].text().then(txt => {
-        try { const s = JSON.parse(txt); if (!Array.isArray(s)) throw 0; songs = normalize(s); cats = loadCats(); save(); $("roleDlg").close(); refresh(); }
-        catch { const m = $("impMsg"); if (m) m.textContent = "That file is not a songbook backup."; }
+        try {
+          const raw = JSON.parse(txt), s = Array.isArray(raw) ? raw : raw.songs;
+          if (!Array.isArray(s)) throw 0;
+          songs = normalize(s); if (raw.sets) sets = raw.sets; if (raw.cats) write(CATKEY, JSON.stringify(raw.cats)); cats = loadCats(); save(); $("roleDlg").close(); refresh();
+        } catch { const m = $("impMsg"); if (m) m.textContent = "That file is not a songbook backup."; }
       });
     }
   });
 
+  document.addEventListener("input", e => { if (e.target.id === "pickQ") renderPick(); });
   $("q").addEventListener("input", e => { view.q = e.target.value; renderList(); });
   $("songDlg").addEventListener("close", () => {
     if (rec) { rec.mr.onstop = null; rec.mr.stop(); rec.stream.getTracks().forEach(t => t.stop()); rec = null; }
     clipUrls.forEach(URL.revokeObjectURL); clipUrls = []; currentSong = null;
   });
-  ["songDlg", "roleDlg", "editDlg"].forEach(id => $(id).addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); }));
+  ["songDlg", "setDlg", "roleDlg", "editDlg"].forEach(id => $(id).addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); }));
 
   applyTheme();
   refresh();
