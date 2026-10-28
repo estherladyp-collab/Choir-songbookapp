@@ -1,5 +1,5 @@
 const CACHE = "songbook-v1";
-const FILES = ["./", "index.html", "styles.css", "app.js", "data.js", "config.js", "manifest.webmanifest",
+const FILES = ["./", "index.html", "styles.css", "app.js", "data.js", "config.js", "pdf.js", "assets/logo-pdf.jpg", "manifest.webmanifest",
   "assets/logo.png", "assets/bg.jpg", "assets/icon-192.png", "assets/icon-512.png"];
 
 self.addEventListener("install", e => {

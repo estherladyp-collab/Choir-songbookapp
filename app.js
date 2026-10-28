@@ -195,11 +195,14 @@
     $("setsView").innerHTML = newBtn + (list.length
       ? `<div class="count">${list.length} set ${list.length === 1 ? "list" : "lists"}</div><ul class="list">${list.map(t => `<li class="row"><button class="song" type="button" data-set="${t.id}">
           <span class="main"><span class="t">${esc(t.name)}</span><span class="c">${esc(setMeta(t))} · ${t.songIds.filter(songById).length} songs</span></span></button></li>`).join("")}</ul>`
-      : `<div class="empty">No set lists yet.${canSeeKeys() ? "<br>Tap + to build the first one." : "<br>Song leaders can create them."}</div>`);
+      : `<div class="empty">No set lists yet.<br>Tap "New set list" to build one.</div>`);
   }
 
-  function setText(t) {
-    const withKeys = canSeeKeys() && t.leader;
+  const wantKeys = t => canSeeKeys() && !!t.leader && (!$("pdfKeys") || $("pdfKeys").checked);
+  const waHref = t => "https://wa.me/?text=" + encodeURIComponent(setText(t, wantKeys(t)));
+  const say = m => { const o = $("copyOut"); if (o) o.innerHTML = `<p class="muted">${esc(m)}</p>`; };
+
+  function setText(t, withKeys) {
     const lines = t.songIds.map(songById).filter(Boolean).map((s, i) => `${i + 1}. ${s.title}${withKeys && s.keys[t.leader] ? " (" + s.keys[t.leader] + ")" : ""}`);
     return `${t.name}\n${setMeta(t)}\n\n${lines.join("\n")}${t.note ? "\n\n" + t.note : ""}`;
   }
@@ -213,25 +216,59 @@
         <span class="main"><span class="t">${esc(s.title)}</span><span class="c">${esc(s.composer || "Composer not added yet")}</span></span>${k}</button></li>`;
     }).join("");
     $("setDlg").innerHTML = `<div class="sheet"><div class="sheet-head"><div style="flex:1"><h2>${esc(t.name)}</h2><div class="sub">${esc(setMeta(t))}</div></div>
-      ${canSeeKeys() ? `<button class="btn" data-editset="${t.id}" type="button">Edit</button>` : ""}
+      <button class="btn" data-editset="${t.id}" type="button">Edit</button>
       <button class="x" data-close type="button" aria-label="Close">✕</button></div>
       ${t.note ? `<p class="note">${esc(t.note)}</p>` : ""}
       <div class="sec"><h3>Songs in this set</h3>${rows ? `<ol class="list setlist">${rows}</ol>` : `<p class="muted">No songs added yet.</p>`}</div>
-      <div class="sec"><div class="btns"><button class="btn solid" id="copySet" data-set="${t.id}" type="button">Copy as text</button></div>
-      <div id="copyOut"></div></div></div>`;
+      <div class="sec"><h3>Share</h3>
+        ${canSeeKeys() && t.leader ? `<label class="check" style="margin-bottom:12px"><input type="checkbox" id="pdfKeys" checked> Include keys</label>` : ""}
+        <div class="btns"><button class="btn solid" id="pdfSet" data-sid="${t.id}" type="button">Download PDF</button>
+        <a class="btn" id="waLink" data-sid="${t.id}" href="${waHref(t)}" target="_blank" rel="noopener">WhatsApp text</a>
+        <button class="btn" id="copySet" data-sid="${t.id}" type="button">Copy text</button></div>
+        <div id="copyOut" role="status"></div></div></div>`;
     if (!$("setDlg").open) $("setDlg").showModal();
   }
 
   async function copySet(id) {
-    const t = sets.find(x => x.id === id), text = setText(t), out = $("copyOut");
-    try { await navigator.clipboard.writeText(text); out.innerHTML = `<p class="muted">Copied. You can paste it into WhatsApp.</p>`; }
+    const t = sets.find(x => x.id === id), text = setText(t, wantKeys(t)), out = $("copyOut");
+    try { await navigator.clipboard.writeText(text); say("Copied. You can paste it into WhatsApp."); }
     catch {
       out.innerHTML = `<p class="muted">Select the text below and copy it.</p><textarea class="copybox" readonly></textarea>`;
       const ta = out.querySelector("textarea"); ta.value = text; ta.focus(); ta.select();
     }
   }
 
-  const newSet = () => canSeeKeys() ? openSetEdit() : openRole("Enter your song leader or director code to create set lists.");
+  // hands the PDF to the viewer: claude.ai save dialog, the phone's share sheet (WhatsApp), or a normal download
+  async function deliver(blob, filename) {
+    try {
+      const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (dl) { await dl.save({ filename, data: blob }); return "saved"; }
+    } catch (e) { if (e && e.code === "declined") return "declined"; }
+    const file = new File([blob], filename, { type: "application/pdf" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: filename }); return "shared"; }
+      catch (e) { if (e && e.name === "AbortError") return "declined"; }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    return "downloaded";
+  }
+
+  async function pdfSet(id) {
+    const t = sets.find(x => x.id === id);
+    say("Preparing the PDF…");
+    let logo = null;
+    try { const r = await fetch("assets/logo-pdf.jpg"); if (r.ok) logo = new Uint8Array(await r.arrayBuffer()); } catch { /* the PDF works without the logo */ }
+    const keys = wantKeys(t);
+    const rows = t.songIds.map(songById).filter(Boolean).map(s => ({ title: s.title, composer: s.composer, key: keys ? s.keys[t.leader] || "" : "" }));
+    const blob = window.makeSetPdf({ title: t.name, meta: setMeta(t), rows, note: t.note, logo });
+    const name = (t.name + (t.date ? " " + t.date : "")).replace(/[^\w\s.-]+/g, "").trim().replace(/\s+/g, "-") || "set-list";
+    const res = await deliver(blob, name + ".pdf");
+    say({ saved: "PDF saved.", shared: "Shared.", downloaded: "PDF downloaded. Attach it from your files in the WhatsApp group.", declined: "Cancelled." }[res] || "Done.");
+  }
+
+  const newSet = () => openSetEdit();
 
   function openSetEdit(id) {
     const old = id && sets.find(x => x.id === id);
@@ -457,7 +494,8 @@
     const song = t.closest(".song"); if (song && song.dataset.id) return openSong(song.dataset.id);
     const tab = t.closest("[data-tab]"); if (tab) { view.tab = tab.dataset.tab; return refresh(); }
     const st = t.closest("[data-set]"); if (st && st.id !== "copySet") return openSet(st.dataset.set);
-    if (t.id === "copySet") return copySet(t.dataset.set);
+    if (t.closest("#copySet")) return copySet(t.closest("#copySet").dataset.sid);
+    if (t.closest("#pdfSet")) return pdfSet(t.closest("#pdfSet").dataset.sid);
     const es = t.closest("[data-editset]"); if (es) { $("setDlg").close(); return openSetEdit(es.dataset.editset); }
     const pk = t.closest("[data-pick]");
     if (pk) { const i = draft.songIds.indexOf(pk.dataset.pick); if (i < 0) draft.songIds.push(pk.dataset.pick); else draft.songIds.splice(i, 1); renderPicked(); return renderPick(); }
@@ -517,6 +555,7 @@
   document.addEventListener("change", e => {
     if (e.target.id === "clipFile" && e.target.files.length) { uploadFiles([...e.target.files]); e.target.value = ""; }
     if (e.target.id === "pickCat") renderPick();
+    if (e.target.id === "pdfKeys") { const a = $("waLink"); a.href = waHref(sets.find(x => x.id === a.dataset.sid)); }
     if (e.target.id === "leaderSel") { view.leader = e.target.value; renderList(); }
     if (e.target.id === "onlyKeys") { view.onlyKeys = e.target.checked; renderList(); }
     if (e.target.id === "imp" && e.target.files[0]) {
