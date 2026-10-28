@@ -2,7 +2,13 @@
   const CATS = [["all", "All"], ["praise", "Praise"], ["worship", "Worship"], ["ministration", "Ministration"]];
   const KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const LEADERS = window.LEADERS;
-  const STORE = "songbook.songs.v1", ROLE = "songbook.role.v1";
+  const STORE = "songbook.songs.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
+  const ICONS = {
+    auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
+    light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    dark: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>'
+  };
+  const LABEL = { auto: "Automatic", light: "Light", dark: "Dark" };
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -11,6 +17,20 @@
 
   let songs = load();
   let role = read(ROLE) || "member";
+  let theme = read(THEME) || "auto";
+
+  function applyTheme() {
+    const r = document.documentElement;
+    if (theme === "auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", theme);
+    const b = $("themeBtn");
+    b.innerHTML = ICONS[theme];
+    b.title = "Appearance: " + LABEL[theme] + " (tap to change)";
+    b.setAttribute("aria-label", b.title);
+  }
+  function cycleTheme() {
+    theme = { auto: "light", light: "dark", dark: "auto" }[theme] || "auto";
+    write(THEME, theme); applyTheme();
+  }
   const view = { cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
 
   function load() {
@@ -49,12 +69,16 @@
     });
     $("count").textContent = rows.length + (rows.length === 1 ? " song" : " songs");
     $("empty").hidden = rows.length > 0;
-    $("list").innerHTML = rows.map(s => {
-      const k = canSeeKeys() ? (s.keys[view.leader] ? `<span class="key">${esc(s.keys[view.leader])}</span>` : `<span class="key none">–</span>`) : "";
-      return `<li><button class="song" type="button" data-id="${s.id}">
-        <span class="main"><span class="t">${esc(s.title)}</span><br><span class="c">${esc(s.composer || "Composer not added yet")}</span></span>
-        <span class="badge">${esc(s.category)}</span>${k}</button></li>`;
-    }).join("");
+    let html = "", cur = "";
+    rows.forEach(s => {
+      const first = (s.title.match(/[A-Za-z0-9]/) || ["#"])[0].toUpperCase();
+      const letter = /\d/.test(first) ? "#" : first;
+      if (letter !== cur) { if (cur) html += "</ul>"; html += `<div class="letter">${letter}</div><ul class="list">`; cur = letter; }
+      const k = canSeeKeys() ? (s.keys[view.leader] ? `<span class="medal">${esc(s.keys[view.leader])}</span>` : `<span class="medal none">–</span>`) : "";
+      html += `<li><button class="song" type="button" data-id="${s.id}">
+        <span class="main"><span class="t">${esc(s.title)}</span><span class="c">${esc(s.composer || "Composer not added yet")} · <span class="cat">${esc(s.category)}</span></span></span>${k}</button></li>`;
+    });
+    $("list").innerHTML = html + (cur ? "</ul>" : "");
   }
 
   const refresh = () => { renderChrome(); renderList(); };
@@ -69,10 +93,10 @@
     else if (s.youtube) listen += `<a class="btn solid" href="${esc(s.youtube)}" target="_blank" rel="noopener">Open video</a>`;
     if (s.audio) listen += `<audio controls preload="none" src="${esc(s.audio)}"></audio>`;
     if (!vid && !s.youtube && !s.audio) listen = `<p class="muted">No video or audio added yet.</p>`;
-    listen += `<p><a class="btn" href="${ytSearch(s)}" target="_blank" rel="noopener">Search on YouTube</a></p>`;
+    listen += `<div class="btns">${vid ? `<a class="btn solid" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Watch on YouTube</a>` : ""}<a class="btn" href="${ytSearch(s)}" target="_blank" rel="noopener">Search on YouTube</a></div>`;
 
     const keys = canSeeKeys() ? `<div class="sec"><h3>Keys by song leader</h3><div class="keys">${
-      LEADERS.map(l => `<div class="keybox"><b>${esc(s.keys[l] || "–")}</b><span>${esc(l)}</span></div>`).join("")}</div></div>` : "";
+      LEADERS.map(l => `<div class="keybox${s.keys[l] ? "" : " none"}"><b>${esc(s.keys[l] || "–")}</b><span>${esc(l)}</span></div>`).join("")}</div></div>` : "";
 
     $("songBody").innerHTML = `<div class="sheet">
       <div class="sheet-head"><div style="flex:1"><h2>${esc(s.title)}</h2><div class="sub">${esc(s.composer || "Composer not added yet")} · ${esc(s.category)}</div></div>
@@ -148,6 +172,7 @@
     const song = t.closest(".song"); if (song) return openSong(song.dataset.id);
     const cat = t.closest("[data-cat]"); if (cat) { view.cat = cat.dataset.cat; return refresh(); }
     const ed = t.closest("[data-edit]"); if (ed) { $("songDlg").close(); return openEdit(ed.dataset.edit); }
+    if (t.closest("#themeBtn")) return cycleTheme();
     if (t.id === "roleBtn") return openRole();
     if (t.id === "addBtn") return openEdit();
     if (t.id === "signOut") return setRole("member");
@@ -190,6 +215,7 @@
   $("q").addEventListener("input", e => { view.q = e.target.value; renderList(); });
   ["songDlg", "roleDlg", "editDlg"].forEach(id => $(id).addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); }));
 
+  applyTheme();
   refresh();
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

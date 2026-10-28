@@ -8,32 +8,40 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="hero">
-  <div class="hero-top">
-    <img class="logo" src="assets/logo.png" alt="Victory Outreach Ministry International logo">
-    <div class="titles">
-      <h1>Choir Songbook</h1>
-      <p>Victory Outreach Ministry International</p>
+  <div class="hero-in">
+    <div class="hero-top">
+      <img class="logo" src="assets/logo.png" alt="Victory Outreach Ministry International logo">
+      <button id="themeBtn" class="pill icon" type="button" aria-label="Appearance"></button>
+      <button id="roleBtn" class="pill" type="button">Member</button>
     </div>
-    <button id="roleBtn" class="role-btn" type="button">Member</button>
-  </div>
-  <div class="search">
-    <input id="q" type="search" placeholder="Search title, composer or lyrics" autocomplete="off" aria-label="Search songs">
-  </div>
-  <div class="chips" id="cats" role="tablist" aria-label="Category"></div>
-  <div class="leaderbar" id="leaderbar" hidden>
-    <label for="leaderSel">Keys for</label>
-    <select id="leaderSel"></select>
-    <label class="check"><input type="checkbox" id="onlyKeys"> only songs with a key</label>
+    <p class="eyebrow">Victory Outreach Ministry International</p>
+    <h1>Choir <em>Songbook</em></h1>
+    <div class="orn"><i></i></div>
   </div>
 </header>
 
+<div class="toolbar">
+  <div class="toolbar-in">
+    <div class="search"><input id="q" type="search" placeholder="Search title, composer or lyrics" autocomplete="off" aria-label="Search songs"></div>
+    <div class="chips" id="cats" role="tablist" aria-label="Category"></div>
+    <div class="leaderbar" id="leaderbar" hidden>
+      <label for="leaderSel">Keys for</label>
+      <select id="leaderSel"></select>
+      <label class="check"><input type="checkbox" id="onlyKeys"> only songs with a key</label>
+    </div>
+  </div>
+</div>
+
 <main>
   <div class="count" id="count"></div>
-  <ul class="list" id="list"></ul>
+  <div id="list"></div>
   <div class="empty" id="empty" hidden>No songs found. Try another word.</div>
 </main>
 
