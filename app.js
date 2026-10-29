@@ -78,6 +78,7 @@
     const m = String(url || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
     return m ? m[1] : "";
   }
+  const lyricsSearch = s => "https://www.google.com/search?q=" + encodeURIComponent(s.title + " " + (s.composer || "") + " lyrics");
   const ytSearch = s => "https://www.youtube.com/results?search_query=" + encodeURIComponent(s.title + " " + (s.composer || "") + " worship");
 
   // ---------- list ----------
@@ -471,7 +472,7 @@
       <div class="sec"><h3>Listen</h3>${listen}</div>
       <div class="sec"><h3>Recordings</h3><div id="clips"></div></div>
       ${keys}
-      <div class="sec"><h3>Lyrics</h3>${s.lyrics ? lyricsHtml(s.lyrics) : `<p class="muted">Lyrics not added yet.</p>`}</div>
+      <div class="sec"><h3>Lyrics</h3>${s.lyrics ? lyricsHtml(s.lyrics) : `<p class="muted">Lyrics not added yet.</p>${isDirector() ? `<div class="btns"><button class="btn solid" data-editlyrics="${s.id}" type="button">Add lyrics</button><a class="btn" href="${lyricsSearch(s)}" target="_blank" rel="noopener">Search lyrics online</a></div>` : ""}`}</div>
     </div>`;
     const d = $("songDlg");
     if (!d.open) d.showModal();
@@ -562,6 +563,8 @@
       const id = $("setForm").dataset.id; sets = sets.filter(x => x.id !== id); save(); $("editDlg").close(); refresh(); return;
     }
     const cat = t.closest("[data-cat]"); if (cat) { view.cat = cat.dataset.cat; return refresh(); }
+    const el = t.closest("[data-editlyrics]");
+    if (el) { $("songDlg").close(); openEdit(el.dataset.editlyrics); const ta = $("lyr"); ta.scrollIntoView({ block: "center" }); ta.focus(); return; }
     const ed = t.closest("[data-edit]"); if (ed) { $("songDlg").close(); return openEdit(ed.dataset.edit); }
     if (t.closest("#themeBtn")) return cycleTheme();
     if (t.id === "arrange") { const ta = $("lyr"); ta.value = autoArrange(ta.value); return; }
