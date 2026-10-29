@@ -54,7 +54,10 @@
     if (!list) { write(REVKEY, String(latest)); return normalize(seed()); }
     const have = +read(REVKEY) || 1;
     if (have < latest) {
-      seed().filter(s => (s.seedRev || 1) > have && !list.some(x => x.id === s.id)).forEach(s => list.push(s));
+      seed().filter(s => (s.seedRev || 1) > have).forEach(s => {
+        const mine = list.find(x => x.id === s.id);
+        if (!mine) list.push(s); else if (!mine.youtube && s.youtube) mine.youtube = s.youtube;
+      });
       list.sort((x, y) => x.title.localeCompare(y.title, undefined, { sensitivity: "base" }));
       write(REVKEY, String(latest)); write(STORE, JSON.stringify(list));
     }

@@ -5,14 +5,15 @@ window.SEED_SONGS=[
   "title": "3y3 wo na woka3bem",
   "composer": "",
   "category": "ministration",
-  "youtube": "",
+  "youtube": "https://youtube.com/shorts/5EdZtOGAHjc",
   "audio": "",
   "lyrics": "",
   "keys": {
    "Hephzibah": "B"
   },
   "note": "",
-  "needsCheck": false
+  "needsCheck": false,
+  "seedRev": 4
  },
  {
   "id": "s002",
