@@ -3,7 +3,7 @@
   const OLD_CATS = { praise: "Praise", worship: "Worship", ministration: "Ministration" };
   const KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const LEADERS = window.LEADERS;
-  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", SETKEY = "songbook.sets.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
+  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", REVKEY = "songbook.seedrev.v1", SETKEY = "songbook.sets.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
   const ICONS = {
     auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
     light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -45,9 +45,20 @@
     });
     return list;
   }
+  // songs added to the built-in list later (seedRev 2, 3, ...) are merged into saved lists once, so deleted songs stay deleted
   function load() {
-    try { const s = JSON.parse(read(STORE)); if (Array.isArray(s) && s.length) return normalize(s); } catch { /* fall through */ }
-    return normalize(JSON.parse(JSON.stringify(window.SEED_SONGS)));
+    const seed = () => JSON.parse(JSON.stringify(window.SEED_SONGS));
+    const latest = Math.max(1, ...window.SEED_SONGS.map(s => s.seedRev || 1));
+    let list = null;
+    try { const s = JSON.parse(read(STORE)); if (Array.isArray(s) && s.length) list = s; } catch { /* fall through */ }
+    if (!list) { write(REVKEY, String(latest)); return normalize(seed()); }
+    const have = +read(REVKEY) || 1;
+    if (have < latest) {
+      seed().filter(s => (s.seedRev || 1) > have && !list.some(x => x.id === s.id)).forEach(s => list.push(s));
+      list.sort((x, y) => x.title.localeCompare(y.title, undefined, { sensitivity: "base" }));
+      write(REVKEY, String(latest)); write(STORE, JSON.stringify(list));
+    }
+    return normalize(list);
   }
   function loadCats() {
     let extra = [];

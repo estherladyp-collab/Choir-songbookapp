@@ -2375,5 +2375,35 @@ window.SEED_SONGS=[
   "keys": {},
   "note": "",
   "needsCheck": false
+ },
+ {
+  "id": "s196",
+  "title": "Yahweh (Refuge)",
+  "composer": "Wildfire Music",
+  "categories": [
+   "Worship"
+  ],
+  "youtube": "https://youtu.be/7rB9kEXMj8Q",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 2
+ },
+ {
+  "id": "s197",
+  "title": "Only You",
+  "composer": "Dunsin Oyekan",
+  "categories": [
+   "Worship"
+  ],
+  "youtube": "https://youtu.be/uobLkWraHGw",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 2
  }
 ];
