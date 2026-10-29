@@ -451,7 +451,9 @@
     currentSong = id;
     const vid = ytId(s.youtube);
     let listen = "";
-    if (vid) listen += `<iframe class="player" src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(s.title)}" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+    const inPreview = !!(window.claude && window.claude.use);
+    if (vid && inPreview) listen += `<div class="vidcard"><b>Video</b><span>This preview page cannot play YouTube. In the live app the video plays right here.</span></div>`;
+    else if (vid) listen += `<iframe class="player" src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(s.title)}" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
     else if (s.youtube) listen += `<a class="btn solid" href="${esc(s.youtube)}" target="_blank" rel="noopener">Open video</a>`;
     if (s.audio) listen += `<audio controls preload="none" src="${esc(s.audio)}"></audio>`;
     if (!vid && !s.youtube && !s.audio) listen = `<p class="muted">No video or audio added yet.</p>`;

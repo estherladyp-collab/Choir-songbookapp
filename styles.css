@@ -248,3 +248,6 @@ form label.cbx input { width: 18px; height: 18px; padding: 0; accent-color: var(
 .llabel { font: 500 .7rem/1 var(--font-body); letter-spacing: .22em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
 .llabel em { text-transform: none; letter-spacing: .02em; color: var(--muted); font-size: .8rem; }
 .ltext { white-space: pre-wrap; }
+.vidcard { aspect-ratio: 16/9; display: grid; place-content: center; gap: 6px; text-align: center; padding: 16px; margin-bottom: 12px; border-radius: 14px; border: 1px dashed var(--line-gold); background: var(--surface); }
+.vidcard b { font: 500 1.4rem var(--font-display); color: var(--gold); }
+.vidcard span { color: var(--muted); font-size: .88rem; }

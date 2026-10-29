@@ -2405,5 +2405,18 @@ window.SEED_SONGS=[
   "note": "",
   "needsCheck": false,
   "seedRev": 2
+ },
+ {
+  "id": "s198",
+  "title": "Sample Song (delete me)",
+  "composer": "Example only",
+  "categories": [],
+  "youtube": "",
+  "audio": "",
+  "lyrics": "Morning sun is rising\nOver the quiet hill\nSing it out together\nSing it out, sing it still\n\nLanterns in the window\nShow us the way back home\n\nSing it out together\nSing it out, sing it still\n\nRivers run to the ocean\nStars hold the evening sky\n\nSing it out together\nSing it out, sing it still",
+  "keys": {},
+  "note": "Practice song with made-up words. Sign in as Director, tap the pencil, then Auto-arrange to see Verse, Chorus and Bridge. Delete it when you are done.",
+  "needsCheck": false,
+  "seedRev": 3
  }
 ];
