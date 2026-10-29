@@ -409,6 +409,41 @@
     mr.start(); btn.textContent = "■ Stop 0:00"; btn.classList.add("rec"); clipMsg("Recording… tap Stop when you are done.", true);
   }
 
+  // ---------- lyrics: [Verse 1] / [Chorus] / [Bridge] markers on their own line split the text into labelled sections ----------
+  function parseLyrics(txt) {
+    const out = []; let cur = null;
+    String(txt || "").split(/\r?\n/).forEach(line => {
+      const m = line.match(/^\s*\[(.+?)\]\s*$/);
+      if (m) { cur = { label: m[1].trim(), lines: [] }; out.push(cur); }
+      else { if (!cur) { cur = { label: "", lines: [] }; out.push(cur); } cur.lines.push(line); }
+    });
+    return out.map(x => ({ label: x.label, text: x.lines.join("\n").trim() })).filter(x => x.label || x.text);
+  }
+  const lyricsHtml = txt => `<div class="lyrics">${parseLyrics(txt).map(x => `<div class="lsec">${x.label ? `<div class="llabel">${esc(x.label)}${x.text ? "" : " <em>(repeat)</em>"}</div>` : ""}${x.text ? `<div class="ltext">${esc(x.text)}</div>` : ""}</div>`).join("")}</div>`;
+
+  // splits pasted lyrics at blank lines; blocks that repeat become the Chorus, a single block between choruses becomes the Bridge
+  function autoArrange(txt) {
+    const blocks = String(txt).replace(/\r/g, "").split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    if (!blocks.length || blocks.some(b => /^\[.+\]/.test(b))) return txt;
+    const norm = b => b.toLowerCase().replace(/[^a-z0-9\u00c0-\u024f ]+/g, "").replace(/\s+/g, " ").trim();
+    const keys = blocks.map(norm), count = {};
+    keys.forEach(k => { count[k] = (count[k] || 0) + 1; });
+    const choruses = [...new Set(keys.filter(k => count[k] > 1))];
+    const first = k => keys.indexOf(k), last = k => keys.lastIndexOf(k);
+    const done = new Set(); let v = 0, bridge = false;
+    return blocks.map((b, i) => {
+      const k = keys[i], ci = choruses.indexOf(k);
+      if (ci >= 0) {
+        const name = choruses.length > 1 ? "Chorus " + (ci + 1) : "Chorus";
+        if (done.has(k)) return `[${name}]`;
+        done.add(k); return `[${name}]\n${b}`;
+      }
+      const between = choruses.some(c => first(c) < i && last(c) > i);
+      if (between && !bridge && done.size && keys.slice(0, i).filter(x => choruses.includes(x)).length >= 2) { bridge = true; return `[Bridge]\n${b}`; }
+      return `[Verse ${++v}]\n${b}`;
+    }).join("\n\n");
+  }
+
   // ---------- song sheet ----------
   function openSong(id) {
     const s = songs.find(x => x.id === id);
@@ -434,7 +469,7 @@
       <div class="sec"><h3>Listen</h3>${listen}</div>
       <div class="sec"><h3>Recordings</h3><div id="clips"></div></div>
       ${keys}
-      <div class="sec"><h3>Lyrics</h3>${s.lyrics ? `<div class="lyrics">${esc(s.lyrics)}</div>` : `<p class="muted">Lyrics not added yet.</p>`}</div>
+      <div class="sec"><h3>Lyrics</h3>${s.lyrics ? lyricsHtml(s.lyrics) : `<p class="muted">Lyrics not added yet.</p>`}</div>
     </div>`;
     const d = $("songDlg");
     if (!d.open) d.showModal();
@@ -477,7 +512,10 @@
       <label>Keys by song leader</label>
       <div class="grid2">${LEADERS.map(l => `<div><span class="muted" style="font-size:.8rem">${esc(l)}</span><select name="key_${esc(l)}"><option value="">–</option>${KEYS.map(k => `<option${s.keys[l] === k ? " selected" : ""}>${k}</option>`).join("")}</select></div>`).join("")}</div>
       <label>Note (optional)</label><input name="note" value="${esc(s.note || "")}">
-      <label>Lyrics</label><textarea name="lyrics">${esc(s.lyrics)}</textarea>
+      <label for="lyr">Lyrics</label>
+      <p class="muted" style="margin:0 0 8px;font-size:.85rem">Only add lyrics your choir may use, for example under your church license. Tap Auto-arrange to split them into Verse, Chorus and Bridge, or type [Verse 1], [Chorus] or [Bridge] on its own line.</p>
+      <textarea id="lyr" name="lyrics">${esc(s.lyrics)}</textarea>
+      <div class="btns" style="margin-top:10px"><button class="btn" id="arrange" type="button">Auto-arrange</button></div>
       <div class="actions"><button class="btn solid" type="submit">Save</button>
       ${id ? `<button class="btn danger" id="delSong" type="button">Delete</button>` : ""}</div></form>`;
     d.showModal();
@@ -524,6 +562,7 @@
     const cat = t.closest("[data-cat]"); if (cat) { view.cat = cat.dataset.cat; return refresh(); }
     const ed = t.closest("[data-edit]"); if (ed) { $("songDlg").close(); return openEdit(ed.dataset.edit); }
     if (t.closest("#themeBtn")) return cycleTheme();
+    if (t.id === "arrange") { const ta = $("lyr"); ta.value = autoArrange(ta.value); return; }
     if (t.id === "recBtn") return toggleRec();
     const dc = t.closest("[data-delclip]");
     if (dc) { if (dc.dataset.sure) delClip(dc.dataset.delclip).then(renderClips); else { dc.dataset.sure = "1"; dc.textContent = "Tap again to delete"; } return; }

@@ -243,3 +243,8 @@ form label.cbx input { width: 18px; height: 18px; padding: 0; accent-color: var(
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .cv-btn { animation: rise 1s 2.3s both; min-width: 230px; margin-top: 8px; }
 @media (prefers-reduced-motion: reduce) { .cover, .cover * { animation: none !important; } .cv-bg { transform: none; } }
+.lyrics { white-space: normal; }
+.lsec + .lsec { margin-top: 24px; }
+.llabel { font: 500 .7rem/1 var(--font-body); letter-spacing: .22em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.llabel em { text-transform: none; letter-spacing: .02em; color: var(--muted); font-size: .8rem; }
+.ltext { white-space: pre-wrap; }
