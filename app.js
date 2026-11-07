@@ -19,7 +19,7 @@
   let songs = load();
   let cats = loadCats();
   let sets = loadSets();
-  let att = loadAtt();
+  let att = null;
   let draft = null;
   let role = read(ROLE) || "member";
   let theme = read(THEME) || "auto";
@@ -36,7 +36,7 @@
     theme = { auto: "light", light: "dark", dark: "auto" }[theme] || "auto";
     write(THEME, theme); applyTheme();
   }
-  const view = { tab: "songs", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
+  const view = { attGroup: "all", attMonth: "", tab: "songs", cat: "all", q: "", leader: LEADERS[0], onlyKeys: false };
 
   // older saves have one "category" per song; songs now carry a list of categories
   function normalize(list) {
@@ -59,6 +59,8 @@
         const mine = list.find(x => x.id === s.id);
         if (!mine) list.push(s); else {
           if (!mine.youtube && s.youtube) mine.youtube = s.youtube;
+          if (s.addCategories) { normalize([mine]); s.addCategories.forEach(c => { if (!mine.categories.includes(c)) mine.categories.push(c); }); }
+          if (!mine.note && s.note) mine.note = s.note;
           if (!mine.lyrics && s.lyrics) { mine.lyrics = s.lyrics; if (!mine.composer) mine.composer = s.composer; if (!mine.note) mine.note = s.note; }
         }
       });
@@ -209,36 +211,83 @@
   // ---------- attendance: director only, saved on this device ----------
   const SESSION_TYPES = ["Rehearsal", "Service", "Other"];
   const MARKS = [["p", "Present", "✓"], ["e", "Excused", "E"], ["", "Absent", "–"]];
+  const LATE = [[0, "On time"], [10, "+10 min"], [20, "+20 min"], [30, "+30 min"], [60, "+1 hr"]];
+  const START_MEMBERS = ["Johanna", "Ella", "Anastasia", "Moses", "Avis", "Joel"];
+  const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
+
   function loadAtt() {
-    try { const a = JSON.parse(read(ATTKEY)); if (a && Array.isArray(a.members) && Array.isArray(a.sessions)) return a; } catch { /* start fresh */ }
-    return { members: LEADERS.map((n, i) => ({ id: "m" + (i + 1), name: n })), sessions: [] };
+    let a = null;
+    try { const x = JSON.parse(read(ATTKEY)); if (x && Array.isArray(x.members) && Array.isArray(x.sessions)) a = x; } catch { /* start fresh */ }
+    if (!a) a = { members: [], sessions: [] };
+    if (a.v !== 2) {   // v2: leaders and members, arrival times
+      const has = n => a.members.some(m => sameName(m.name, n));
+      a.members.forEach(m => { if (!m.role) m.role = LEADERS.some(n => sameName(n, m.name)) ? "leader" : "member"; });
+      LEADERS.forEach((n, i) => { if (!has(n)) a.members.push({ id: "m" + (i + 1), name: n, role: "leader" }); });
+      START_MEMBERS.forEach((n, i) => { if (!has(n)) a.members.push({ id: "n" + (i + 1), name: n, role: "member" }); });
+      a.sessions.forEach(x => { if (!x.late) x.late = {}; });
+      a.v = 2; write(ATTKEY, JSON.stringify(a));
+    }
+    return a;
   }
   const saveAtt = () => write(ATTKEY, JSON.stringify(att));
   const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const roleOf = m => m.role || "member";
+  const ordered = () => [...att.members.filter(m => roleOf(m) === "leader"), ...att.members.filter(m => roleOf(m) !== "leader")];
+  const inGroup = m => view.attGroup === "all" || roleOf(m) === view.attGroup;
+  const lateOf = (x, id) => (x.late && x.late[id]) || 0;
   const presentCount = x => att.members.filter(m => x.marks[m.id] === "p").length;
   const markWord = v => v === "p" ? "present" : v === "e" ? "excused" : "absent";
+  const monthKey = d => String(d).slice(0, 7);
+  const monthName = k => new Date(k + "-01T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const monthKeys = () => [...new Set([...att.sessions.map(x => monthKey(x.date)), todayStr().slice(0, 7)])].sort().reverse();
 
   // excused absences do not count against anyone
   function attStats() {
     const sess = att.sessions.slice().sort((a, b) => a.date.localeCompare(b.date) || a.created - b.created);
-    return att.members.map(m => {
+    return ordered().filter(inGroup).map(m => {
       const p = sess.filter(x => x.marks[m.id] === "p").length, e = sess.filter(x => x.marks[m.id] === "e").length;
       const expected = sess.length - e;
-      return { m, p, e, total: sess.length, expected, pct: expected > 0 ? Math.round(100 * p / expected) : 0, recent: sess.slice(-8).map(x => x.marks[m.id] || "") };
+      return { m, p, e, expected, pct: expected > 0 ? Math.round(100 * p / expected) : 0, recent: sess.slice(-8).map(x => x.marks[m.id] || "") };
     }).sort((a, b) => b.pct - a.pct || a.m.name.localeCompare(b.m.name));
   }
 
+  function monthHtml() {
+    const keys = monthKeys();
+    if (!keys.includes(view.attMonth)) view.attMonth = keys[0];
+    const sess = att.sessions.filter(x => monthKey(x.date) === view.attMonth);
+    let P = 0, L = 0, MIN = 0, EXP = 0;
+    const rows = ordered().filter(inGroup).map(m => {
+      let p = 0, e = 0, a = 0, late = 0, mins = 0;
+      sess.forEach(x => {
+        const v = x.marks[m.id];
+        if (v === "p") { p++; const l = lateOf(x, m.id); if (l > 0) { late++; mins += l; } } else if (v === "e") e++; else a++;
+      });
+      P += p; L += late; MIN += mins; EXP += sess.length - e;
+      return { m, p, e, a, late, mins, pct: sess.length - e > 0 ? Math.round(100 * p / (sess.length - e)) : 0 };
+    }).sort((x, y) => y.pct - x.pct || x.late - y.late || x.m.name.localeCompare(y.m.name));
+    const tile = (n, w) => `<div class="tile"><b>${n}</b><span>${w}</span></div>`;
+    const body = sess.length ? `<div class="tiles">${tile(sess.length, sess.length === 1 ? "session" : "sessions")}${tile((EXP ? Math.round(100 * P / EXP) : 0) + "%", "attendance")}${tile((P ? Math.round(100 * (P - L) / P) : 0) + "%", "on time")}${tile(MIN, "minutes late")}</div>
+      <div class="scroll"><table class="mtab"><thead><tr><th scope="col">Name</th><th scope="col" title="Present">✓</th><th scope="col" title="Times late">Late</th><th scope="col" title="Minutes late in total">Min</th><th scope="col" title="Excused">E</th><th scope="col" title="Absent">–</th><th scope="col" title="Attendance">%</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><th scope="row">${esc(r.m.name)}${roleOf(r.m) === "leader" ? "<small>Leader</small>" : ""}</th><td>${r.p}</td><td>${r.late || ""}</td><td>${r.mins || ""}</td><td>${r.e || ""}</td><td>${r.a || ""}</td><td class="pc">${r.pct}%</td></tr>`).join("")}</tbody></table></div>
+      <p class="muted" style="font-size:.82rem;margin:10px 0 0">✓ present · Late = times late · Min = minutes late in total · E excused · – absent. Excused absences do not count against the percentage.</p>`
+      : `<p class="muted">No sessions in ${esc(monthName(view.attMonth))} yet.</p>`;
+    return `<div class="sec"><h3>Month overview</h3><div class="mhead"><select id="attMonth" aria-label="Month">${keys.map(k => `<option value="${k}"${k === view.attMonth ? " selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select></div>${body}</div>`;
+  }
+
   function renderAtt() {
-    if (!isDirector()) { $("attView").innerHTML = ""; return; }
+    if (!isDirector() || !att) { $("attView").innerHTML = ""; return; }
     const stats = attStats(), sess = att.sessions.slice().sort((a, b) => b.date.localeCompare(a.date) || b.created - a.created);
     const rows = stats.map(r => {
       const badge = r.expected >= 3 ? (r.pct >= 90 ? `<span class="abadge good">Always there</span>` : r.pct < 50 ? `<span class="abadge low">Often missing</span>` : "") : "";
-      return `<li class="arow"><div class="an"><b>${esc(r.m.name)}</b>${badge}<span class="c">${r.p} of ${r.expected} rehearsals${r.e ? " · " + r.e + " excused" : ""}</span></div>
+      return `<li class="arow"><div class="an"><b>${esc(r.m.name)}</b>${badge}<span class="c">${r.p} of ${r.expected} sessions${r.e ? " · " + r.e + " excused" : ""}</span></div>
         <div class="ad" role="img" aria-label="Last ${r.recent.length}: ${r.recent.map(markWord).join(", ") || "none"}">${r.recent.map(v => `<i class="d ${v || "a"}"></i>`).join("")}</div>
         <div class="ap">${r.expected ? r.pct + "%" : "–"}</div></li>`;
     }).join("");
+    const grp = [["all", "Everyone"], ["leader", "Leaders"], ["member", "Members"]];
     $("attView").innerHTML = `<div class="attbar"><button class="btn solid" data-newsess type="button">+ New rehearsal</button><button class="btn" data-members type="button">Members (${att.members.length})</button></div>
-      ${sess.length ? `<div class="sec"><h3>Who comes</h3><ul class="alist">${rows}</ul><p class="muted" style="font-size:.82rem;margin:10px 0 0">Excused absences do not count against anyone. The dots show the last 8 sessions: gold is present, ring is excused, grey is absent.</p></div>
+      <div class="chips" style="margin-top:14px">${grp.map(([v, l]) => `<button class="chip${view.attGroup === v ? " on" : ""}" data-agrp="${v}" type="button">${l}</button>`).join("")}</div>
+      ${monthHtml()}
+      ${sess.length ? `<div class="sec"><h3>All time</h3><ul class="alist">${rows}</ul><p class="muted" style="font-size:.82rem;margin:10px 0 0">The dots show the last 8 sessions: gold is present, ring is excused, grey is absent.</p></div>
       <div class="sec"><h3>Sessions</h3><ul class="list">${sess.map(x => `<li class="row"><button class="song" type="button" data-sess="${x.id}"><span class="main"><span class="t">${esc(x.label || "Rehearsal")}</span><span class="c">${esc(fmtDate(x.date))}</span></span><span class="medal">${presentCount(x)}</span></button></li>`).join("")}</ul></div>`
       : `<div class="empty">No rehearsals yet.<br>Tap "New rehearsal" and mark who is there.</div>`}`;
   }
@@ -260,33 +309,50 @@
       <div class="grid2"><div><label for="sessDate">Date</label><input id="sessDate" type="date" value="${esc(x.date)}"></div>
       <div><label for="sessType">Type</label><select id="sessType">${SESSION_TYPES.map(t => `<option${t === x.label ? " selected" : ""}>${t}</option>`).join("")}</select></div></div>
       <div class="btns" style="margin:18px 0 6px"><button class="btn" id="allPresent" type="button">Mark everyone present</button></div>
-      <p class="muted" style="font-size:.82rem;margin:0 0 6px">✓ present · E excused · – absent</p>
-      <ul class="roll">${att.members.map(m => `<li class="rr" data-mid="${m.id}"><span class="rn">${esc(m.name)}</span><div class="mk" role="group" aria-label="${esc(m.name)}">${MARKS.map(([v, w, g]) =>
-        `<button type="button" class="mkb ${v || "a"}" data-mk="${v}" data-mid="${m.id}" aria-pressed="${(x.marks[m.id] || "") === v}" aria-label="${w}">${g}</button>`).join("")}</div></li>`).join("")}</ul>
+      <p class="muted" style="font-size:.82rem;margin:0 0 6px">✓ present · E excused · – absent. For ✓ you can also tap when they arrived.</p>
+      <ul class="roll">${ordered().map(m => { const v = x.marks[m.id] || "", l = lateOf(x, m.id); return `<li class="rr" data-mid="${m.id}">
+        <div class="rtop"><span class="rn">${esc(m.name)}${roleOf(m) === "leader" ? "<small>Leader</small>" : ""}</span><div class="mk" role="group" aria-label="${esc(m.name)}">${MARKS.map(([k, w, g]) =>
+          `<button type="button" class="mkb ${k || "a"}" data-mk="${k}" data-mid="${m.id}" aria-pressed="${v === k}" aria-label="${w}">${g}</button>`).join("")}</div></div>
+        <div class="late" role="group" aria-label="Arrival of ${esc(m.name)}"${v === "p" ? "" : " hidden"}>${LATE.map(([n, w]) =>
+          `<button type="button" class="lt" data-late="${n}" data-mid="${m.id}" aria-pressed="${l === n}">${w}</button>`).join("")}</div></li>`; }).join("")}</ul>
       <div class="actions"><button class="btn danger" id="delSess" type="button">Delete this session</button></div></form>`;
     $("editDlg").showModal();
     sessCount(x);
   }
 
   function sessCount(x) {
-    const el = $("sessCount"), e = att.members.filter(m => x.marks[m.id] === "e").length;
-    if (el) el.textContent = `${presentCount(x)} of ${att.members.length} present${e ? " · " + e + " excused" : ""}`;
+    const el = $("sessCount"), e = att.members.filter(m => x.marks[m.id] === "e").length, l = att.members.filter(m => x.marks[m.id] === "p" && lateOf(x, m.id) > 0).length;
+    if (el) el.textContent = `${presentCount(x)} of ${att.members.length} present${l ? " · " + l + " late" : ""}${e ? " · " + e + " excused" : ""}`;
   }
 
+  function syncRow(x, mid) {
+    const row = document.querySelector(`.rr[data-mid="${mid}"]`), v = x.marks[mid] || "", l = lateOf(x, mid);
+    if (!row) return;
+    row.querySelectorAll(".mkb").forEach(b => b.setAttribute("aria-pressed", String(v === b.dataset.mk)));
+    row.querySelector(".late").hidden = v !== "p";
+    row.querySelectorAll(".lt").forEach(b => b.setAttribute("aria-pressed", String(l === +b.dataset.late)));
+  }
   function setMark(x, mid, v) {
     if (v) x.marks[mid] = v; else delete x.marks[mid];
-    saveAtt();
-    document.querySelectorAll(`.mkb[data-mid="${mid}"]`).forEach(b => b.setAttribute("aria-pressed", String((x.marks[mid] || "") === b.dataset.mk)));
-    sessCount(x);
+    if (v !== "p" && x.late) delete x.late[mid];
+    saveAtt(); syncRow(x, mid); sessCount(x);
+  }
+  function setLate(x, mid, mins) {
+    x.marks[mid] = "p"; if (!x.late) x.late = {};
+    if (mins) x.late[mid] = mins; else delete x.late[mid];
+    saveAtt(); syncRow(x, mid); sessCount(x);
   }
 
   function openMembers() {
+    const lines = r => esc(att.members.filter(m => roleOf(m) === r).map(m => m.name).join("\n"));
     $("editDlg").innerHTML = `<form class="sheet" id="membersForm">
       <div class="sheet-head"><h2>Choir members</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>
-      <label for="memNames">One name per line</label>
-      <textarea id="memNames" name="names" style="min-height:50vh">${esc(att.members.map(m => m.name).join("\n"))}</textarea>
+      <label for="memLeaders">Leaders (one name per line)</label>
+      <textarea id="memLeaders" name="leaders" style="min-height:22vh">${lines("leader")}</textarea>
+      <label for="memNames">Members (one name per line)</label>
+      <textarea id="memNames" name="names" style="min-height:34vh">${lines("member")}</textarea>
       <p class="muted" style="font-size:.85rem">If you remove a name, old sessions are kept but the person no longer appears in the list.</p>
-      <div class="actions"><button class="btn solid" type="submit">Save members</button></div></form>`;
+      <div class="actions"><button class="btn solid" type="submit">Save</button></div></form>`;
     $("editDlg").showModal();
   }
 
@@ -653,6 +719,9 @@
     if (t.closest("[data-newsess]")) return openNewSession();
     if (t.closest("[data-members]")) return openMembers();
     const ss = t.closest("[data-sess]"); if (ss) return openSession(ss.dataset.sess);
+    const ag = t.closest("[data-agrp]"); if (ag) { view.attGroup = ag.dataset.agrp; return renderAtt(); }
+    const lt = t.closest("[data-late]");
+    if (lt) { const x = att.sessions.find(y => y.id === lt.closest("form").dataset.sid); return setLate(x, lt.dataset.mid, +lt.dataset.late); }
     const mk = t.closest("[data-mk]");
     if (mk) { const x = att.sessions.find(y => y.id === mk.closest("form").dataset.sid); return setMark(x, mk.dataset.mid, mk.dataset.mk); }
     if (t.id === "allPresent") { const x = att.sessions.find(y => y.id === $("sessForm").dataset.sid); att.members.forEach(m => setMark(x, m.id, "p")); return; }
@@ -723,13 +792,18 @@
     if (e.target.id === "editForm") saveEdit(e.target);
     if (e.target.id === "setForm") saveSet(e.target);
     if (e.target.id === "newSessForm") {
-      const f = new FormData(e.target), x = { id: "a" + Date.now().toString(36), date: f.get("date"), label: f.get("label"), marks: {}, created: Date.now() };
+      const f = new FormData(e.target), x = { id: "a" + Date.now().toString(36), date: f.get("date"), label: f.get("label"), marks: {}, late: {}, created: Date.now() };
       att.sessions.push(x); saveAtt(); renderAtt(); openSession(x.id);
     }
     if (e.target.id === "membersForm") {
-      const names = [...new Set(new FormData(e.target).get("names").split("\n").map(n => n.trim()).filter(Boolean))];
-      att.members = names.map((n, i) => att.members.find(m => m.name.toLowerCase() === n.toLowerCase()) || { id: "m" + Date.now().toString(36) + i, name: n });
-      saveAtt(); $("editDlg").close();
+      const f = new FormData(e.target), seen = [], list = [];
+      [["leader", f.get("leaders")], ["member", f.get("names")]].forEach(([role, txt]) => txt.split("\n").map(n => n.trim()).filter(Boolean).forEach(n => {
+        if (seen.some(k => sameName(k, n))) return;
+        seen.push(n);
+        const old = att.members.find(m => sameName(m.name, n));
+        list.push({ id: old ? old.id : "m" + Date.now().toString(36) + list.length, name: n, role });
+      }));
+      att.members = list; saveAtt(); $("editDlg").close();
     }
     if (e.target.id === "lyrForm") {
       const id = e.target.dataset.id, song = songs.find(x => x.id === id);
@@ -744,6 +818,7 @@
       if (e.target.id === "sessDate" && e.target.value) x.date = e.target.value; else if (e.target.id === "sessType") x.label = e.target.value;
       saveAtt();
     }
+    if (e.target.id === "attMonth") { view.attMonth = e.target.value; renderAtt(); }
     if (e.target.id === "pickCat") renderPick();
     if (e.target.id === "pdfKeys") { const a = $("waLink"); a.href = waHref(sets.find(x => x.id === a.dataset.sid)); }
     if (e.target.id === "leaderSel") { view.leader = e.target.value; renderList(); }
@@ -768,6 +843,7 @@
   $("editDlg").addEventListener("close", () => renderAtt());
   ["songDlg", "setDlg", "roleDlg", "editDlg"].forEach(id => $(id).addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); }));
 
+  att = loadAtt();
   applyTheme();
   refresh();
   openCover();

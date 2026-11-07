@@ -775,15 +775,17 @@ window.SEED_SONGS=[
   "id": "s064",
   "title": "Holy Forever",
   "composer": "CeCe Winans",
-  "category": "worship",
+  "categories": ["Worship", "Ministration"],
   "youtube": "",
   "audio": "",
   "lyrics": "",
   "keys": {
    "Franzi": "E"
   },
-  "note": "",
-  "needsCheck": false
+  "note": "Songwriters: Brian Johnson, Chris Tomlin, Jason Ingram, Jenn Johnson, Phil Wickham.",
+  "needsCheck": false,
+  "addCategories": ["Ministration"],
+  "seedRev": 6
  },
  {
   "id": "s065",
@@ -2421,5 +2423,20 @@ window.SEED_SONGS=[
   "note": "Practice song with made-up words. Sign in as Director, tap the pencil, then Auto-arrange to see Verse, Chorus and Bridge. Delete it when you are done.",
   "needsCheck": false,
   "seedRev": 3
+ },
+ {
+  "id": "s199",
+  "title": "I Want More of You",
+  "composer": "Sinach",
+  "categories": [
+   "Ministration"
+  ],
+  "youtube": "",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 6
  }
 ];
