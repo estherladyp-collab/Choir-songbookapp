@@ -2438,5 +2438,65 @@ window.SEED_SONGS=[
   "note": "",
   "needsCheck": false,
   "seedRev": 6
+ },
+ {
+  "id": "s200",
+  "title": "Goodness of God",
+  "composer": "CeCe Winans",
+  "categories": [
+   "Ministration"
+  ],
+  "youtube": "",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 7
+ },
+ {
+  "id": "s201",
+  "title": "God Is for Me",
+  "composer": "Sinach",
+  "categories": [
+   "Ministration"
+  ],
+  "youtube": "",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 7
+ },
+ {
+  "id": "s202",
+  "title": "I Stand Amazed",
+  "composer": "Sinach",
+  "categories": [
+   "Ministration"
+  ],
+  "youtube": "",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 7
+ },
+ {
+  "id": "s203",
+  "title": "The Name of Jesus",
+  "composer": "Sinach",
+  "categories": [
+   "Ministration"
+  ],
+  "youtube": "",
+  "audio": "",
+  "lyrics": "",
+  "keys": {},
+  "note": "",
+  "needsCheck": false,
+  "seedRev": 7
  }
 ];
