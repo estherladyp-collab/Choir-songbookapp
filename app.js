@@ -478,7 +478,7 @@
       <div class="sec"><h3>Listen</h3>${listen}</div>
       <div class="sec"><h3>Recordings</h3><div id="clips"></div></div>
       ${keys}
-      <div class="sec"><h3>Lyrics</h3>${s.lyrics ? lyricsHtml(s.lyrics) : `<p class="muted">Lyrics not added yet.</p>${isDirector() ? `<div class="btns"><button class="btn solid" data-editlyrics="${s.id}" type="button">Add lyrics</button><a class="btn" href="${lyricsSearch(s)}" target="_blank" rel="noopener">Search lyrics online</a></div>` : ""}`}</div>
+      <div class="sec"><h3>Lyrics</h3>${isDirector() && s.lyrics ? `<div class="btns" style="margin-bottom:12px"><button class="btn sm" data-editlyr="${s.id}" type="button">Edit lyrics</button></div>` : ""}${s.lyrics ? lyricsHtml(s.lyrics) : `<p class="muted">Lyrics not added yet.</p>${isDirector() ? `<div class="btns"><button class="btn solid" data-editlyrics="${s.id}" type="button">Add lyrics</button><a class="btn" href="${lyricsSearch(s)}" target="_blank" rel="noopener">Search lyrics online</a></div>` : ""}`}</div>
     </div>`;
     const d = $("songDlg");
     if (!d.open) d.showModal();
@@ -530,6 +530,18 @@
     d.showModal();
   }
 
+  // lyrics only: a focused editor for changing a line the way the choir sings it
+  function openLyricsEdit(id) {
+    const s = songs.find(x => x.id === id), d = $("editDlg");
+    d.innerHTML = `<form class="sheet" id="lyrForm" data-id="${id}">
+      <div class="sheet-head"><div style="flex:1"><h2>Edit lyrics</h2><div class="sub">${esc(s.title)}</div></div><button class="x" data-close type="button" aria-label="Close">✕</button></div>
+      <p class="muted" style="margin:18px 0 6px;font-size:.88rem">Change any line the way your choir sings it. Lines like [Verse 1] or [Chorus] are the section labels.</p>
+      <label for="lyr">Lyrics</label>
+      <textarea id="lyr" name="lyrics" style="min-height:52vh">${esc(s.lyrics)}</textarea>
+      <div class="actions"><button class="btn solid" type="submit">Save lyrics</button><button class="btn" id="arrange" type="button">Auto-arrange</button></div></form>`;
+    d.showModal();
+  }
+
   function saveEdit(form) {
     const f = new FormData(form), id = form.dataset.id;
     const keys = {};
@@ -569,6 +581,7 @@
       const id = $("setForm").dataset.id; sets = sets.filter(x => x.id !== id); save(); $("editDlg").close(); refresh(); return;
     }
     const cat = t.closest("[data-cat]"); if (cat) { view.cat = cat.dataset.cat; return refresh(); }
+    const el2 = t.closest("[data-editlyr]"); if (el2) return openLyricsEdit(el2.dataset.editlyr);
     const el = t.closest("[data-editlyrics]");
     if (el) { $("songDlg").close(); openEdit(el.dataset.editlyrics); const ta = $("lyr"); ta.scrollIntoView({ block: "center" }); ta.focus(); return; }
     const ed = t.closest("[data-edit]"); if (ed) { $("songDlg").close(); return openEdit(ed.dataset.edit); }
@@ -611,6 +624,10 @@
     }
     if (e.target.id === "editForm") saveEdit(e.target);
     if (e.target.id === "setForm") saveSet(e.target);
+    if (e.target.id === "lyrForm") {
+      const id = e.target.dataset.id, song = songs.find(x => x.id === id);
+      song.lyrics = e.target.elements.lyrics.value.trim(); save(); $("editDlg").close(); refresh(); openSong(id);
+    }
   });
 
   document.addEventListener("change", e => {
