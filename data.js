@@ -1156,14 +1156,15 @@ window.SEED_SONGS=[
  {
   "id": "s095",
   "title": "It is so sweet to trust in Jesus",
-  "composer": "",
+  "composer": "Louisa M. R. Stead / William J. Kirkpatrick",
   "category": "worship",
   "youtube": "",
   "audio": "",
-  "lyrics": "",
+  "lyrics": "[Verse 1]\n'Tis so sweet to trust in Jesus,\nJust to take Him at His word;\nJust to rest upon His promise,\nJust to know, \"Thus saith the Lord.\"\n\n[Chorus]\nJesus, Jesus, how I trust Him!\nHow I've proved Him o'er and o'er!\nJesus, Jesus, precious Jesus!\nO for grace to trust Him more!\n\n[Verse 2]\nO how sweet to trust in Jesus,\nJust to trust His cleansing blood;\nAnd in simple faith to plunge me\n'Neath the healing, cleansing flood!\n\n[Chorus]\n\n[Verse 3]\nYes, 'tis sweet to trust in Jesus,\nJust from sin and self to cease;\nJust from Jesus simply taking\nLife and rest, and joy and peace.\n\n[Chorus]\n\n[Verse 4]\nI'm so glad I learned to trust Thee,\nPrecious Jesus, Savior, Friend;\nAnd I know that Thou art with me,\nWilt be with me to the end.\n\n[Chorus]",
   "keys": {},
-  "note": "",
-  "needsCheck": true
+  "note": "Public domain hymn.",
+  "needsCheck": false,
+  "seedRev": 5
  },
  {
   "id": "s096",
@@ -1410,14 +1411,15 @@ window.SEED_SONGS=[
  {
   "id": "s116",
   "title": "My Jesus, I love thee",
-  "composer": "",
+  "composer": "William R. Featherston / A. J. Gordon",
   "category": "worship",
   "youtube": "",
   "audio": "",
-  "lyrics": "",
+  "lyrics": "[Verse 1]\nMy Jesus, I love Thee, I know Thou art mine;\nFor Thee all the follies of sin I resign;\nMy gracious Redeemer, my Savior art Thou;\nIf ever I loved Thee, my Jesus, 'tis now.\n\n[Verse 2]\nI love Thee because Thou hast first loved me,\nAnd purchased my pardon on Calvary's tree;\nI love Thee for wearing the thorns on Thy brow;\nIf ever I loved Thee, my Jesus, 'tis now.\n\n[Verse 3]\nI'll love Thee in life, I will love Thee in death,\nAnd praise Thee as long as Thou lendest me breath;\nAnd say when the death-dew lies cold on my brow,\nIf ever I loved Thee, my Jesus, 'tis now.\n\n[Verse 4]\nIn mansions of glory and endless delight,\nI'll ever adore Thee in heaven so bright;\nI'll sing with the glittering crown on my brow;\nIf ever I loved Thee, my Jesus, 'tis now.",
   "keys": {},
-  "note": "",
-  "needsCheck": true
+  "note": "Public domain hymn.",
+  "needsCheck": false,
+  "seedRev": 5
  },
  {
   "id": "s117",

@@ -56,7 +56,10 @@
     if (have < latest) {
       seed().filter(s => (s.seedRev || 1) > have).forEach(s => {
         const mine = list.find(x => x.id === s.id);
-        if (!mine) list.push(s); else if (!mine.youtube && s.youtube) mine.youtube = s.youtube;
+        if (!mine) list.push(s); else {
+          if (!mine.youtube && s.youtube) mine.youtube = s.youtube;
+          if (!mine.lyrics && s.lyrics) { mine.lyrics = s.lyrics; if (!mine.composer) mine.composer = s.composer; if (!mine.note) mine.note = s.note; }
+        }
       });
       list.sort((x, y) => x.title.localeCompare(y.title, undefined, { sensitivity: "base" }));
       write(REVKEY, String(latest)); write(STORE, JSON.stringify(list));
