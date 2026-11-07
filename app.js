@@ -715,9 +715,9 @@
   document.addEventListener("submit", e => {
     e.preventDefault();
     if (e.target.id === "roleForm") {
-      const c = $("code").value.trim();
-      if (c === window.CONFIG.DIRECTOR_CODE) setRole("director");
-      else if (c === window.CONFIG.LEADER_CODE) setRole("leader");
+      const c = $("code").value.trim().toLowerCase(), same = k => c === String(k).toLowerCase();
+      if (same(window.CONFIG.DIRECTOR_CODE)) setRole("director");
+      else if (same(window.CONFIG.LEADER_CODE)) setRole("leader");
       else $("roleMsg").textContent = "That code is not right.";
     }
     if (e.target.id === "editForm") saveEdit(e.target);

@@ -3,5 +3,5 @@
 window.CONFIG = {
   CHOIR_NAME: "Victory Choir",
   LEADER_CODE: "Leader-4827",
-  DIRECTOR_CODE: "Director-6159"
+  DIRECTOR_CODE: "Esther"
 };
