@@ -33,6 +33,7 @@
       <button class="tab" data-cover type="button">Home</button>
       <button class="tab on" data-tab="songs" type="button" role="tab">Songs</button>
       <button class="tab" data-tab="sets" type="button" role="tab">Set Lists</button>
+      <button class="tab" id="attTab" data-tab="att" type="button" role="tab" hidden>Attendance</button>
     </div>
     <div class="tools" id="songTools">
       <div class="search"><input id="q" type="search" placeholder="Search title, composer or lyrics" autocomplete="off" aria-label="Search songs"></div>
@@ -53,6 +54,7 @@
     <div class="empty" id="empty" hidden>No songs found. Try another word.</div>
   </div>
   <div id="setsView" hidden></div>
+  <div id="attView" hidden></div>
 </main>
 
 <button id="addBtn" class="fab" type="button" hidden aria-label="Add">+</button>

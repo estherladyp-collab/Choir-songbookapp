@@ -3,7 +3,7 @@
   const OLD_CATS = { praise: "Praise", worship: "Worship", ministration: "Ministration" };
   const KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const LEADERS = window.LEADERS;
-  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", REVKEY = "songbook.seedrev.v1", SETKEY = "songbook.sets.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
+  const STORE = "songbook.songs.v1", CATKEY = "songbook.cats.v1", REVKEY = "songbook.seedrev.v1", SETKEY = "songbook.sets.v1", ATTKEY = "songbook.att.v1", ROLE = "songbook.role.v1", THEME = "songbook.theme.v1";
   const ICONS = {
     auto: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
     light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -19,6 +19,7 @@
   let songs = load();
   let cats = loadCats();
   let sets = loadSets();
+  let att = loadAtt();
   let draft = null;
   let role = read(ROLE) || "member";
   let theme = read(THEME) || "auto";
@@ -94,12 +95,15 @@
     $("leaderbar").hidden = !canSeeKeys();
     $("leaderSel").innerHTML = LEADERS.map(l => `<option${l === view.leader ? " selected" : ""}>${esc(l)}</option>`).join("");
     $("onlyKeys").checked = view.onlyKeys;
-    $("addBtn").hidden = view.tab === "sets" ? false : !isDirector();
+    if (view.tab === "att" && !isDirector()) view.tab = "songs";
+    $("addBtn").hidden = view.tab === "sets" ? false : view.tab === "songs" ? !isDirector() : true;
     $("addBtn").setAttribute("aria-label", view.tab === "sets" ? "New set list" : "Add song");
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === view.tab));
     $("songTools").hidden = view.tab !== "songs";
     $("songsView").hidden = view.tab !== "songs";
     $("setsView").hidden = view.tab !== "sets";
+    $("attTab").hidden = !isDirector();
+    $("attView").hidden = view.tab !== "att";
     const rb = $("roleBtn");
     rb.textContent = role === "director" ? "Director" : role === "leader" ? "Song Leader" : "Member";
     rb.classList.toggle("on", role !== "member");
@@ -128,7 +132,7 @@
     $("list").innerHTML = html + (cur ? "</ul>" : "");
   }
 
-  const refresh = () => { renderChrome(); renderList(); renderSets(); };
+  const refresh = () => { renderChrome(); renderList(); renderSets(); renderAtt(); };
 
   const WORSHIP = [
     { k: "Scripture", t: "This people have I formed for myself; they shall shew forth my praise.", r: "Isaiah 43:21" },
@@ -200,6 +204,90 @@
     const c = $("cover");
     c.classList.add("leaving"); stopRotation(); setInert(false);
     setTimeout(() => { c.hidden = true; cancelAnimationFrame(raf); }, reduceMotion() ? 0 : 500);
+  }
+
+  // ---------- attendance: director only, saved on this device ----------
+  const SESSION_TYPES = ["Rehearsal", "Service", "Other"];
+  const MARKS = [["p", "Present", "✓"], ["e", "Excused", "E"], ["", "Absent", "–"]];
+  function loadAtt() {
+    try { const a = JSON.parse(read(ATTKEY)); if (a && Array.isArray(a.members) && Array.isArray(a.sessions)) return a; } catch { /* start fresh */ }
+    return { members: LEADERS.map((n, i) => ({ id: "m" + (i + 1), name: n })), sessions: [] };
+  }
+  const saveAtt = () => write(ATTKEY, JSON.stringify(att));
+  const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const presentCount = x => att.members.filter(m => x.marks[m.id] === "p").length;
+  const markWord = v => v === "p" ? "present" : v === "e" ? "excused" : "absent";
+
+  // excused absences do not count against anyone
+  function attStats() {
+    const sess = att.sessions.slice().sort((a, b) => a.date.localeCompare(b.date) || a.created - b.created);
+    return att.members.map(m => {
+      const p = sess.filter(x => x.marks[m.id] === "p").length, e = sess.filter(x => x.marks[m.id] === "e").length;
+      const expected = sess.length - e;
+      return { m, p, e, total: sess.length, expected, pct: expected > 0 ? Math.round(100 * p / expected) : 0, recent: sess.slice(-8).map(x => x.marks[m.id] || "") };
+    }).sort((a, b) => b.pct - a.pct || a.m.name.localeCompare(b.m.name));
+  }
+
+  function renderAtt() {
+    if (!isDirector()) { $("attView").innerHTML = ""; return; }
+    const stats = attStats(), sess = att.sessions.slice().sort((a, b) => b.date.localeCompare(a.date) || b.created - a.created);
+    const rows = stats.map(r => {
+      const badge = r.expected >= 3 ? (r.pct >= 90 ? `<span class="abadge good">Always there</span>` : r.pct < 50 ? `<span class="abadge low">Often missing</span>` : "") : "";
+      return `<li class="arow"><div class="an"><b>${esc(r.m.name)}</b>${badge}<span class="c">${r.p} of ${r.expected} rehearsals${r.e ? " · " + r.e + " excused" : ""}</span></div>
+        <div class="ad" role="img" aria-label="Last ${r.recent.length}: ${r.recent.map(markWord).join(", ") || "none"}">${r.recent.map(v => `<i class="d ${v || "a"}"></i>`).join("")}</div>
+        <div class="ap">${r.expected ? r.pct + "%" : "–"}</div></li>`;
+    }).join("");
+    $("attView").innerHTML = `<div class="attbar"><button class="btn solid" data-newsess type="button">+ New rehearsal</button><button class="btn" data-members type="button">Members (${att.members.length})</button></div>
+      ${sess.length ? `<div class="sec"><h3>Who comes</h3><ul class="alist">${rows}</ul><p class="muted" style="font-size:.82rem;margin:10px 0 0">Excused absences do not count against anyone. The dots show the last 8 sessions: gold is present, ring is excused, grey is absent.</p></div>
+      <div class="sec"><h3>Sessions</h3><ul class="list">${sess.map(x => `<li class="row"><button class="song" type="button" data-sess="${x.id}"><span class="main"><span class="t">${esc(x.label || "Rehearsal")}</span><span class="c">${esc(fmtDate(x.date))}</span></span><span class="medal">${presentCount(x)}</span></button></li>`).join("")}</ul></div>`
+      : `<div class="empty">No rehearsals yet.<br>Tap "New rehearsal" and mark who is there.</div>`}`;
+  }
+
+  function openNewSession() {
+    $("editDlg").innerHTML = `<form class="sheet" id="newSessForm">
+      <div class="sheet-head"><h2>New rehearsal</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>
+      <div class="grid2"><div><label for="nsDate">Date</label><input id="nsDate" name="date" type="date" required value="${todayStr()}"></div>
+      <div><label for="nsType">Type</label><select id="nsType" name="label">${SESSION_TYPES.map(t => `<option>${t}</option>`).join("")}</select></div></div>
+      <div class="actions"><button class="btn solid" type="submit">Start roll call</button></div></form>`;
+    $("editDlg").showModal();
+  }
+
+  function openSession(id) {
+    const x = att.sessions.find(y => y.id === id);
+    if (!x) return;
+    $("editDlg").innerHTML = `<form class="sheet" id="sessForm" data-sid="${x.id}">
+      <div class="sheet-head"><div style="flex:1"><h2>${esc(x.label || "Rehearsal")}</h2><div class="sub" id="sessCount"></div></div><button class="x" data-close type="button" aria-label="Close">✕</button></div>
+      <div class="grid2"><div><label for="sessDate">Date</label><input id="sessDate" type="date" value="${esc(x.date)}"></div>
+      <div><label for="sessType">Type</label><select id="sessType">${SESSION_TYPES.map(t => `<option${t === x.label ? " selected" : ""}>${t}</option>`).join("")}</select></div></div>
+      <div class="btns" style="margin:18px 0 6px"><button class="btn" id="allPresent" type="button">Mark everyone present</button></div>
+      <p class="muted" style="font-size:.82rem;margin:0 0 6px">✓ present · E excused · – absent</p>
+      <ul class="roll">${att.members.map(m => `<li class="rr" data-mid="${m.id}"><span class="rn">${esc(m.name)}</span><div class="mk" role="group" aria-label="${esc(m.name)}">${MARKS.map(([v, w, g]) =>
+        `<button type="button" class="mkb ${v || "a"}" data-mk="${v}" data-mid="${m.id}" aria-pressed="${(x.marks[m.id] || "") === v}" aria-label="${w}">${g}</button>`).join("")}</div></li>`).join("")}</ul>
+      <div class="actions"><button class="btn danger" id="delSess" type="button">Delete this session</button></div></form>`;
+    $("editDlg").showModal();
+    sessCount(x);
+  }
+
+  function sessCount(x) {
+    const el = $("sessCount"), e = att.members.filter(m => x.marks[m.id] === "e").length;
+    if (el) el.textContent = `${presentCount(x)} of ${att.members.length} present${e ? " · " + e + " excused" : ""}`;
+  }
+
+  function setMark(x, mid, v) {
+    if (v) x.marks[mid] = v; else delete x.marks[mid];
+    saveAtt();
+    document.querySelectorAll(`.mkb[data-mid="${mid}"]`).forEach(b => b.setAttribute("aria-pressed", String((x.marks[mid] || "") === b.dataset.mk)));
+    sessCount(x);
+  }
+
+  function openMembers() {
+    $("editDlg").innerHTML = `<form class="sheet" id="membersForm">
+      <div class="sheet-head"><h2>Choir members</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>
+      <label for="memNames">One name per line</label>
+      <textarea id="memNames" name="names" style="min-height:50vh">${esc(att.members.map(m => m.name).join("\n"))}</textarea>
+      <p class="muted" style="font-size:.85rem">If you remove a name, old sessions are kept but the person no longer appears in the list.</p>
+      <div class="actions"><button class="btn solid" type="submit">Save members</button></div></form>`;
+    $("editDlg").showModal();
   }
 
   // ---------- set lists ----------
@@ -562,6 +650,16 @@
     const t = e.target;
     if (t.closest("[data-close]")) { t.closest("dialog").close(); return; }
     const song = t.closest(".song"); if (song && song.dataset.id) return openSong(song.dataset.id);
+    if (t.closest("[data-newsess]")) return openNewSession();
+    if (t.closest("[data-members]")) return openMembers();
+    const ss = t.closest("[data-sess]"); if (ss) return openSession(ss.dataset.sess);
+    const mk = t.closest("[data-mk]");
+    if (mk) { const x = att.sessions.find(y => y.id === mk.closest("form").dataset.sid); return setMark(x, mk.dataset.mid, mk.dataset.mk); }
+    if (t.id === "allPresent") { const x = att.sessions.find(y => y.id === $("sessForm").dataset.sid); att.members.forEach(m => setMark(x, m.id, "p")); return; }
+    if (t.id === "delSess") {
+      if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Tap again to delete"; return; }
+      const id = $("sessForm").dataset.sid; att.sessions = att.sessions.filter(y => y.id !== id); saveAtt(); $("editDlg").close(); return;
+    }
     const tab = t.closest("[data-tab]"); if (tab) { view.tab = tab.dataset.tab; return refresh(); }
     const st = t.closest("[data-set]"); if (st && st.id !== "copySet") return openSet(st.dataset.set);
     if (t.closest("#copySet")) return copySet(t.closest("#copySet").dataset.sid);
@@ -605,7 +703,7 @@
     }
     if (t.id === "exp") {
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ songs, sets, cats }, null, 1)], { type: "application/json" }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ songs, sets, cats, attendance: att }, null, 1)], { type: "application/json" }));
       a.download = "choir-songbook-backup.json"; a.click(); URL.revokeObjectURL(a.href);
     }
     if (t.id === "reset") {
@@ -624,6 +722,15 @@
     }
     if (e.target.id === "editForm") saveEdit(e.target);
     if (e.target.id === "setForm") saveSet(e.target);
+    if (e.target.id === "newSessForm") {
+      const f = new FormData(e.target), x = { id: "a" + Date.now().toString(36), date: f.get("date"), label: f.get("label"), marks: {}, created: Date.now() };
+      att.sessions.push(x); saveAtt(); renderAtt(); openSession(x.id);
+    }
+    if (e.target.id === "membersForm") {
+      const names = [...new Set(new FormData(e.target).get("names").split("\n").map(n => n.trim()).filter(Boolean))];
+      att.members = names.map((n, i) => att.members.find(m => m.name.toLowerCase() === n.toLowerCase()) || { id: "m" + Date.now().toString(36) + i, name: n });
+      saveAtt(); $("editDlg").close();
+    }
     if (e.target.id === "lyrForm") {
       const id = e.target.dataset.id, song = songs.find(x => x.id === id);
       song.lyrics = e.target.elements.lyrics.value.trim(); save(); $("editDlg").close(); refresh(); openSong(id);
@@ -632,6 +739,11 @@
 
   document.addEventListener("change", e => {
     if (e.target.id === "clipFile" && e.target.files.length) { uploadFiles([...e.target.files]); e.target.value = ""; }
+    if (e.target.id === "sessDate" || e.target.id === "sessType") {
+      const x = att.sessions.find(y => y.id === $("sessForm").dataset.sid);
+      if (e.target.id === "sessDate" && e.target.value) x.date = e.target.value; else if (e.target.id === "sessType") x.label = e.target.value;
+      saveAtt();
+    }
     if (e.target.id === "pickCat") renderPick();
     if (e.target.id === "pdfKeys") { const a = $("waLink"); a.href = waHref(sets.find(x => x.id === a.dataset.sid)); }
     if (e.target.id === "leaderSel") { view.leader = e.target.value; renderList(); }
@@ -641,7 +753,7 @@
         try {
           const raw = JSON.parse(txt), s = Array.isArray(raw) ? raw : raw.songs;
           if (!Array.isArray(s)) throw 0;
-          songs = normalize(s); if (raw.sets) sets = raw.sets; if (raw.cats) write(CATKEY, JSON.stringify(raw.cats)); cats = loadCats(); save(); $("roleDlg").close(); refresh();
+          songs = normalize(s); if (raw.sets) sets = raw.sets; if (raw.attendance && Array.isArray(raw.attendance.members)) { att = raw.attendance; saveAtt(); } if (raw.cats) write(CATKEY, JSON.stringify(raw.cats)); cats = loadCats(); save(); $("roleDlg").close(); refresh();
         } catch { const m = $("impMsg"); if (m) m.textContent = "That file is not a songbook backup."; }
       });
     }
@@ -653,6 +765,7 @@
     if (rec) { rec.mr.onstop = null; rec.mr.stop(); rec.stream.getTracks().forEach(t => t.stop()); rec = null; }
     clipUrls.forEach(URL.revokeObjectURL); clipUrls = []; currentSong = null;
   });
+  $("editDlg").addEventListener("close", () => renderAtt());
   ["songDlg", "setDlg", "roleDlg", "editDlg"].forEach(id => $(id).addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); }));
 
   applyTheme();
